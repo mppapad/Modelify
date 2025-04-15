@@ -67,40 +67,13 @@ export default function Model() {
             loadModelVariants();
         }, 1000);
 
-        // Create a global handler that can be accessed during AR
-        // @ts-ignore - adding to window
-        window.__applyModelVariant = (variantName) => {
-            const modelViewer = document.querySelector('model-viewer') as any;
-            if (modelViewer) {
-                console.log(`Global variant handler called with: ${variantName}`);
-                modelViewer.variantName = variantName === 'default' ? null : variantName;
-            }
-        };
-
-        return () => {
-            clearTimeout(timer);
-            // @ts-ignore - removing from window
-            delete window.__applyModelVariant;
-        };
+        return () => clearTimeout(timer);
     }, []);
 
     // Set up AR status monitoring
     useEffect(() => {
         const modelViewer = document.querySelector('model-viewer') as any;
         if (!modelViewer) return;
-
-        // Function to ensure variant persistence during AR
-        const ensureARVariant = () => {
-            if (!modelViewer) return;
-
-            // Get the stored variant
-            const storedVariant = modelViewer.getAttribute('data-current-variant') || currentVariant;
-
-            if (storedVariant && storedVariant !== 'default') {
-                console.log(`Reapplying variant in AR: ${storedVariant}`);
-                modelViewer.variantName = storedVariant;
-            }
-        };
 
         // Handle AR status changes
         const handleARStatus = (event: any) => {
@@ -116,17 +89,6 @@ export default function Model() {
                         modelViewer.variantName = currentVariant === 'default' ? null : currentVariant;
                     }
                 }, 300); // Longer timeout to ensure AR session is fully initialized
-
-                // Additional AR variant application attempts
-                setTimeout(ensureARVariant, 600);
-
-                // Call global handler for additional reliability
-                setTimeout(() => {
-                    // @ts-ignore - accessing window method
-                    if (window.__applyModelVariant && currentVariant) {
-                        window.__applyModelVariant(currentVariant);
-                    }
-                }, 900);
             } else if (event.detail.status === 'session-ended') {
                 arSessionActive.current = false;
 
@@ -184,9 +146,10 @@ export default function Model() {
             modelViewer.variantName = variantName === 'default' ? null : variantName;
             setCurrentVariant(variantName);
 
-            // Store variant information for AR use
-            modelViewer.setAttribute('data-current-variant', variantName);
-            modelViewer.dataset.arVariant = variantName;
+            // Store for AR use
+            if (modelViewer) {
+                modelViewer.setAttribute('data-ar-variant', variantName);
+            }
 
             console.log(`Changed variant to: ${variantName}`);
         } catch (error) {
@@ -194,7 +157,68 @@ export default function Model() {
         }
     };
 
+    // Helper for debugging AR variant issues
+    const debugARVariant = () => {
+        const modelViewer = document.querySelector('model-viewer') as any;
+        if (!modelViewer) return;
+
+        // Force the model to update its variant via scene graph manipulation
+        if (currentVariant && currentVariant !== 'default') {
+            try {
+                // Get the loaded model
+                const model = modelViewer.model;
+                if (model) {
+                    console.log('Available variants:', modelViewer.availableVariants);
+                    console.log('Current variant:', modelViewer.variantName);
+
+                    // Force variant application through scene update
+                    modelViewer.variantName = null;
+                    setTimeout(() => {
+                        modelViewer.variantName = currentVariant;
+                        console.log('Forced variant update to:', currentVariant);
+                    }, 50);
+                }
+            } catch (err) {
+                console.error('Error in debug AR variant:', err);
+            }
+        }
+    };
+
+    const ensureARVariant = () => {
+        const modelViewer = document.querySelector('model-viewer') as any;
+        if (!modelViewer) return;
+
+        // Get the stored variant
+        const storedVariant = modelViewer.getAttribute('data-current-variant') || currentVariant;
+
+        if (storedVariant && storedVariant !== 'default') {
+            console.log(`Reapplying variant in AR: ${storedVariant}`);
+            modelViewer.variantName = storedVariant;
+        }
+    };
+
+// Then add this to your AR session handling
+    useEffect(() => {
+        const modelViewer = document.querySelector('model-viewer') as any;
+        if (!modelViewer) return;
+
+        const handleARStatus = (event: any) => {
+            // Existing code...
+
+            if (event.detail.status === 'session-started') {
+                // Existing code...
+
+                // Add this new call
+                setTimeout(ensureARVariant, 300);
+            }
+        };
+
+        modelViewer.addEventListener('ar-status', handleARStatus);
+        return () => modelViewer.removeEventListener('ar-status', handleARStatus);
+    }, [currentVariant]);
+
     // Function to activate AR
+
     const activateAR = () => {
         try {
             const modelViewer = document.querySelector('model-viewer') as any;
