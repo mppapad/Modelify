@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Camera } from "lucide-react";
 import React, { useEffect, useRef } from "react";
 import { ModelViewerProps } from "./types";
 
@@ -6,7 +8,7 @@ const ModelViewer: React.FC<ModelViewerProps> = ({
   src,
   alt,
   ar = true,
-  arModes = "webxr  quick-look",
+  arModes = "webxr scene-viewer quick-look",
   autoRotate = false,
   autoRotateDelay = 2000,
   cameraControls = true,

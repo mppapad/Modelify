@@ -39,6 +39,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 
+// @ts-ignore
 export default function Model() {
     const [currentUrl, setCurrentUrl] = useState('');
     const [isARSupported, setIsARSupported] = useState(false);
@@ -412,8 +413,10 @@ export default function Model() {
         drawLine(lines[4] as SVGLineElement, 'hotspot-dot-X-Y-Z', 'hotspot-dot-X-Y+Z', 'hotspot-dim-X-Y');
     };
 
+    // @ts-ignore
     return (
         <div className="h-full w-full relative">
+
             <ModelViewer
                 ref={modelViewerRef}
                 src="./Angie.glb"
