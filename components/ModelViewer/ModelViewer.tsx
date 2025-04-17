@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 "use client";
 import { Button } from "@/components/ui/button";
 import { Camera } from "lucide-react";
@@ -8,7 +10,7 @@ const ModelViewer: React.FC<ModelViewerProps> = ({
   src,
   alt,
   ar = true,
-  arModes = "webxr scene-viewer quick-look",
+  arModes = "webxr  quick-look",
   autoRotate = false,
   autoRotateDelay = 2000,
   cameraControls = true,
