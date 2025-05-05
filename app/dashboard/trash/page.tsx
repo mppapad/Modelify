@@ -108,10 +108,8 @@ export default function RecycleBinPage() {
         }, 1000);
       } catch (error) {
         console.error("Failed to fetch deleted models:", error);
-        toast({
-          title: "Error",
+        toast("Error", {
           description: "Failed to load deleted models. Please try again.",
-          variant: "destructive",
         });
         setIsLoading(false);
       }
@@ -144,19 +142,15 @@ export default function RecycleBinPage() {
 
       // Mock successful restore
       setDeletedModels(deletedModels.filter((model) => model.id !== modelId));
-      toast({
-        title: "Success",
+      toast("Success", {
         description: "Model has been restored to your models list.",
       });
-
       // Optionally refresh the models dashboard
       // router.refresh();
     } catch (error) {
       console.error("Failed to restore model:", error);
-      toast({
-        title: "Error",
+      toast("Error", {
         description: "Failed to restore model. Please try again.",
-        variant: "destructive",
       });
     }
   };
@@ -169,16 +163,13 @@ export default function RecycleBinPage() {
 
       // Mock successful deletion
       setDeletedModels(deletedModels.filter((model) => model.id !== modelId));
-      toast({
-        title: "Success",
+      toast("Success", {
         description: "Model has been permanently deleted.",
       });
     } catch (error) {
       console.error("Failed to permanently delete model:", error);
-      toast({
-        title: "Error",
+      toast("Error", {
         description: "Failed to permanently delete model. Please try again.",
-        variant: "destructive",
       });
     }
   };
@@ -193,8 +184,7 @@ export default function RecycleBinPage() {
       setDeletedModels(
         deletedModels.filter((model) => !selectedItems.includes(model.id))
       );
-      toast({
-        title: "Success",
+      toast("Success", {
         description: `${selectedItems.length} models have been restored.`,
       });
       setSelectedItems([]);
@@ -203,10 +193,8 @@ export default function RecycleBinPage() {
       // router.refresh();
     } catch (error) {
       console.error("Failed to bulk restore models:", error);
-      toast({
-        title: "Error",
+      toast("Error", {
         description: "Failed to restore some models. Please try again.",
-        variant: "destructive",
       });
     }
   };
@@ -221,17 +209,14 @@ export default function RecycleBinPage() {
       setDeletedModels(
         deletedModels.filter((model) => !selectedItems.includes(model.id))
       );
-      toast({
-        title: "Success",
+      toast("Success", {
         description: `${selectedItems.length} models have been permanently deleted.`,
       });
       setSelectedItems([]);
     } catch (error) {
       console.error("Failed to bulk delete models:", error);
-      toast({
-        title: "Error",
+      toast("Error", {
         description: "Failed to delete some models. Please try again.",
-        variant: "destructive",
       });
     }
   };
