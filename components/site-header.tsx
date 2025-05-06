@@ -13,6 +13,8 @@ const routeTitles = {
   "/dashboard/trash": "Recycling Bin",
   "/dashboard/docs": "Knowledge Base",
   "/dashboard/help": "Get Help",
+  "/dashboard/account": "Account",
+  "/dashboard/upload": "Upload",
   // Add additional paths here as needed
 };
 
