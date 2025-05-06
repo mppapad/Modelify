@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -34,21 +34,138 @@ import {
   HeartHandshake,
 } from "lucide-react";
 
+// Import the skeleton component
+const GetHelpPageSkeleton = () => {
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-12 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Header Skeleton */}
+        <div className="text-center mb-8">
+          <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded-md w-48 mx-auto mb-2 animate-pulse"></div>
+          <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-72 mx-auto animate-pulse"></div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* Contact Form Card Skeleton */}
+          <div className="col-span-1 md:col-span-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+            <div className="mb-4">
+              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-48 animate-pulse"></div>
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-64 mt-2 animate-pulse"></div>
+            </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-16 animate-pulse"></div>
+                  <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded-md w-full animate-pulse"></div>
+                </div>
+                <div className="space-y-2">
+                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-16 animate-pulse"></div>
+                  <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded-md w-full animate-pulse"></div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-24 animate-pulse"></div>
+                <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded-md w-full animate-pulse"></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-20 animate-pulse"></div>
+                <div className="h-32 bg-slate-200 dark:bg-slate-700 rounded-md w-full animate-pulse"></div>
+              </div>
+              <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded-md w-40 animate-pulse"></div>
+            </div>
+          </div>
+
+          {/* Support Admin Card Skeleton */}
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+            <div className="mb-4">
+              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-48 animate-pulse"></div>
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-40 mt-2 animate-pulse"></div>
+            </div>
+            <div className="flex items-center mb-4">
+              <div className="h-16 w-16 bg-slate-200 dark:bg-slate-700 rounded-full mr-4 animate-pulse"></div>
+              <div className="space-y-2">
+                <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded-md w-32 animate-pulse"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-24 animate-pulse"></div>
+              </div>
+            </div>
+            <div className="h-px bg-slate-200 dark:bg-slate-700 w-full my-4"></div>
+            <div className="space-y-3">
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-36 animate-pulse"></div>
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-4 bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md flex-grow animate-pulse"></div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-4 bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-32 animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* FAQ Card Skeleton */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-8">
+          <div className="mb-4">
+            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-48 animate-pulse"></div>
+            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-64 mt-2 animate-pulse"></div>
+          </div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="py-3 border-b border-slate-200 dark:border-slate-700"
+              >
+                <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded-md w-full max-w-md animate-pulse"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Knowledge Base Skeleton */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <div className="mb-4">
+            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-32 animate-pulse"></div>
+            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-64 mt-2 animate-pulse"></div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="h-16 bg-slate-200 dark:bg-slate-700 rounded-md animate-pulse"
+              ></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function GetHelpPage() {
   const [copied, setCopied] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  // Simulate loading state
+  useEffect(() => {
+    // Simulate data loading delay
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleCopyEmail = () => {
     navigator.clipboard.writeText("miltospap5@gmail.com");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  const [isSending, setIsSending] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
 
   const handleSubmit = () => {
     // Set sending state
@@ -81,6 +198,12 @@ export default function GetHelpPage() {
     }, 500);
   };
 
+  // Show skeleton while loading
+  if (loading) {
+    return <GetHelpPageSkeleton />;
+  }
+
+  // Show actual content once loaded
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-12 px-4">
       <div className="max-w-4xl mx-auto">
