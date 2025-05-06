@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { Trash2, RefreshCcw, RotateCcw, Search, Filter } from "lucide-react";
+import {
+  Trash2,
+  RefreshCcw,
+  RotateCcw,
+  Search,
+  Filter,
+  MoreHorizontal,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 
 // Import shadcn/ui components
@@ -42,8 +49,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-// Define the model type
+
+// Define the model types
 interface DeletedModel {
   id: string;
   name: string;
@@ -52,12 +66,26 @@ interface DeletedModel {
   expiresAt: Date;
   size: string;
   modelType: string;
+  fileType: string;
+}
+
+interface Model3D {
+  id: string;
+  name: string;
+  description: string;
+  fileSize: string;
+  fileType: string;
+  uploadDate: string;
+  modelType: string;
+  deletedAt?: Date;
+  expiresAt?: Date;
 }
 
 export default function RecycleBinPage() {
   useEffect(() => {
-    document.title = "Modelify | Recycle Bin";
+    document.title = "3D Model Viewer | Recycle Bin";
   }, []);
+
   const router = useRouter();
   const [deletedModels, setDeletedModels] = useState<DeletedModel[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,31 +107,33 @@ export default function RecycleBinPage() {
           const mockData: DeletedModel[] = [
             {
               id: "model-001",
-              name: "Text Classification Model",
-              description: "BERT-based text classifier for sentiment analysis",
+              name: "Robot Character",
+              description: "Animated robot character for game project",
               deletedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
               expiresAt: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000), // 25 days from now
-              size: "2.3 GB",
-              modelType: "NLP",
+              size: "24.5 MB",
+              modelType: "Character",
+              fileType: "glb",
             },
             {
               id: "model-002",
-              name: "Image Recognition v2",
-              description: "ConvNet for product recognition",
+              name: "Modern Chair",
+              description: "Furniture model for interior design visualization",
               deletedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000), // 12 days ago
               expiresAt: new Date(Date.now() + 18 * 24 * 60 * 60 * 1000), // 18 days from now
-              size: "4.7 GB",
-              modelType: "Computer Vision",
+              size: "12.3 MB",
+              modelType: "Furniture",
+              fileType: "glb",
             },
             {
               id: "model-003",
-              name: "Recommender System",
-              description:
-                "Collaborative filtering system for product recommendations",
+              name: "Fantasy Sword",
+              description: "Game asset with PBR materials",
               deletedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000), // 20 days ago
               expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000), // 10 days from now
-              size: "1.8 GB",
-              modelType: "Recommender",
+              size: "5.7 MB",
+              modelType: "Prop",
+              fileType: "glb",
             },
           ];
           setDeletedModels(mockData);
@@ -242,6 +272,11 @@ export default function RecycleBinPage() {
     }
   };
 
+  // Generate embed code
+  const getEmbedCode = (modelId: string): string => {
+    return `<iframe src="/view/${modelId}" width="600" height="400" frameborder="0" allowfullscreen></iframe>`;
+  };
+
   // Loading skeleton
   if (isLoading) {
     return (
@@ -272,14 +307,11 @@ export default function RecycleBinPage() {
                 Recycling Bin
               </CardTitle>
               <CardDescription>
-                Items in the recycling bin are automatically deleted after 30
-                days.
+                3D models in the recycling bin are automatically deleted after
+                30 days.
               </CardDescription>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => router.push("/dashboard/models")}
-            >
+            <Button variant="outline" onClick={() => router.push("./models")}>
               Back to Models
             </Button>
           </div>
@@ -367,9 +399,9 @@ export default function RecycleBinPage() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem>All Types</DropdownMenuItem>
-                  <DropdownMenuItem>NLP Models</DropdownMenuItem>
-                  <DropdownMenuItem>Computer Vision</DropdownMenuItem>
-                  <DropdownMenuItem>Recommender Systems</DropdownMenuItem>
+                  <DropdownMenuItem>Character Models</DropdownMenuItem>
+                  <DropdownMenuItem>Furniture Models</DropdownMenuItem>
+                  <DropdownMenuItem>Props</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -475,6 +507,30 @@ export default function RecycleBinPage() {
                                 Restore
                               </span>
                             </Button>
+
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <span className="sr-only md:not-sr-only md:mr-2">
+                                    Export
+                                  </span>
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80">
+                                <div className="space-y-4">
+                                  <h4 className="font-medium">Embed Model</h4>
+                                  <div className="space-y-2">
+                                    <Textarea
+                                      readOnly
+                                      value={getEmbedCode(model.id)}
+                                    />
+                                  </div>
+                                  <Button className="w-full">
+                                    Copy Embed Code
+                                  </Button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
 
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
