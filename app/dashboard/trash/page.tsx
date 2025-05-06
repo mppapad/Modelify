@@ -55,6 +55,9 @@ interface DeletedModel {
 }
 
 export default function RecycleBinPage() {
+  useEffect(() => {
+    document.title = "Modelify | Recycle Bin";
+  }, []);
   const router = useRouter();
   const [deletedModels, setDeletedModels] = useState<DeletedModel[]>([]);
   const [searchQuery, setSearchQuery] = useState("");

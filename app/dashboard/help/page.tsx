@@ -142,6 +142,9 @@ const GetHelpPageSkeleton = () => {
 };
 
 export default function GetHelpPage() {
+  useEffect(() => {
+    document.title = "Modelify | Get Help";
+  }, []);
   const [copied, setCopied] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -150,6 +153,7 @@ export default function GetHelpPage() {
   const [loading, setLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  // Change header
 
   // Simulate loading state
   useEffect(() => {

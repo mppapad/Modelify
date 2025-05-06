@@ -13,8 +13,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Modelify WebXR",
+  title: "Modelify",
   description: "Effortlessly showcase and interact with your 3D models",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({

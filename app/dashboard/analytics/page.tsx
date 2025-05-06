@@ -14,6 +14,9 @@ import { Clock, BarChart, LineChart, PieChart, Database } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AnalyticsPage() {
+  useEffect(() => {
+    document.title = "Modelify | Analytics";
+  }, []);
   const [progress, setProgress] = useState(0);
   const [daysRemaining, setDaysRemaining] = useState("Unknown");
   const [loading, setLoading] = useState(true);

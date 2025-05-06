@@ -7,7 +7,6 @@ export default withAuth(async function middleware(req) {}, {
 
 export const config = {
   matcher: [
-    // This pattern will match all routes except _next, static files, and now also 3D model files
     "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest?|glb|gltf|usdz)).*)",
   ],
 };

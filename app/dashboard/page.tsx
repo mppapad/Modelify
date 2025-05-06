@@ -22,7 +22,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Navbar component (simplified version)
@@ -45,6 +44,11 @@ function Navbar() {
 }
 
 export default function DashboardPage() {
+  // Change header
+  useEffect(() => {
+    document.title = "Modelify | Dashboard";
+  }, []);
+
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
 

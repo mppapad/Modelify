@@ -21,6 +21,7 @@ import {
   SearchIcon,
   SettingsIcon,
   Trash2,
+  PlusCircleIcon,
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
