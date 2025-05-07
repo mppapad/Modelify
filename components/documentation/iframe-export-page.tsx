@@ -108,7 +108,7 @@ export default function IframeExportPage() {
           <CardHeader>
             <div className="flex items-center">
               <Code className="mr-2 h-5 w-5" />
-              <CardTitle>Export as iFrame</CardTitle>
+              <CardTitle>Embed Models</CardTitle>
             </div>
             <CardDescription>
               Learn how to embed your 3D models on any website using iFrames
@@ -266,9 +266,9 @@ export default function IframeExportPage() {
                 Previous: Delete Models
               </Button>
             </Link>
-            <Link href="/dashboard/docs/upload-models">
+            <Link href="/dashboard/docs">
               <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                Next: Upload Models
+                Next: Getting Started
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>

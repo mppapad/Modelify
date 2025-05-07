@@ -198,15 +198,15 @@ export default function DeleteModelsPage() {
             </Alert>
           </CardContent>
           <CardFooter className="flex flex-col sm:flex-row justify-between gap-3 border-t pt-4">
-            <Link href="/dashboard/docs">
+            <Link href="/dashboard/docs/upload-models">
               <Button variant="outline" size="sm" className="w-full sm:w-auto">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Previous: Getting Started
+                Previous: Upload Models
               </Button>
             </Link>
-            <Link href="/dashboard/docs/delete-models">
+            <Link href="/dashboard/docs/iframe-export">
               <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                Next: Delete Models
+                Next: Embed Models
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>

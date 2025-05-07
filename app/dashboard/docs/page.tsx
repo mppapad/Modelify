@@ -422,6 +422,7 @@ export function Component() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            disabled
                             className="w-full justify-between"
                           >
                             View Tutorials{" "}
@@ -446,6 +447,7 @@ export function Component() {
                         </CardContent>
                         <CardFooter className="pt-0">
                           <Button
+                            disabled
                             variant="ghost"
                             size="sm"
                             className="w-full justify-between"
