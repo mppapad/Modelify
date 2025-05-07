@@ -24,7 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import Image from "next/image";
 
-export default function DeleteModelsPage() {
+export default function ModelsUploadPage() {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -100,22 +100,24 @@ export default function DeleteModelsPage() {
           <CardHeader>
             <div className="flex items-center">
               <Upload className="mr-2 h-5 w-5" />
-              <CardTitle>Delete Models</CardTitle>
+              <CardTitle>Upload Models</CardTitle>
             </div>
             <CardDescription>
-              Learn how to delete your 3D models on Modelify
+              Learn how to Upload your 3D models on Modelify
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">
-              Our platform makes it easy to delete your 3D models.
+              Our platform makes it easy to upload your 3D models.
             </p>
 
             <Alert className="mb-6 border-amber-700">
               <Info className="h-4 w-4 stroke-amber-700" />
-              <AlertTitle className="text-amber-700">Note</AlertTitle>
+              <AlertTitle className="text-amber-700">
+                Supported files
+              </AlertTitle>
               <AlertDescription>
-                Modelify keeps your deleted models in the recycling bin.
+                Modelify only supports .glb and .usdz files, for the 3D models
               </AlertDescription>
             </Alert>
 
@@ -123,9 +125,8 @@ export default function DeleteModelsPage() {
               <div className="rounded-lg border overflow-hidden">
                 <div className="relative bg-muted">
                   <Image
-                    src="/delete.gif"
+                    src="/upload.png"
                     alt="iFrame export interface"
-                    layout={"responsive"}
                     width={1920}
                     height={1080}
                     quality={100}
@@ -134,15 +135,16 @@ export default function DeleteModelsPage() {
                   />
                 </div>
                 <div className="p-4 space-y-2">
-                  <h3 className="font-medium">Delete Model</h3>
+                  <h3 className="font-medium">Export Interface</h3>
                   <p className="text-sm text-muted-foreground">
-                    This is a guide to permanently delete your 3D models.
+                    The export interface allows you to generate embed codes for
+                    your 3D models.
                   </p>
                 </div>
               </div>
 
               <div className="space-y-4 mt-6">
-                <h3 className="text-lg font-medium">Steps to Delete a Model</h3>
+                <h3 className="text-lg font-medium">Steps to Upload a Model</h3>
                 <ol className="space-y-4">
                   <li className="flex">
                     <div className="mr-3 flex h-7 w-7 items-center justify-center rounded-full border bg-muted text-sm font-medium">
@@ -150,11 +152,11 @@ export default function DeleteModelsPage() {
                     </div>
                     <div>
                       <p className="font-medium">
-                        Navigate to the models section
+                        Navigate to the Upload section
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Click on the three dots of the model you want to delete
-                        and press delete.
+                        Click on the "Choose file" field in the upload card
+                        navigation.
                       </p>
                     </div>
                   </li>
@@ -164,11 +166,10 @@ export default function DeleteModelsPage() {
                     </div>
                     <div>
                       <p className="font-medium">
-                        Navigate to the Recycling Bin section
+                        Select the model from your device
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Check the checkbox next to your model or press the
-                        delete button.
+                        Find and click on the model you want to upload.
                       </p>
                     </div>
                   </li>
@@ -177,10 +178,21 @@ export default function DeleteModelsPage() {
                       3
                     </div>
                     <div>
-                      <p className="font-medium">Multiple models delete</p>
+                      <p className="font-medium">Click "Upload Model"</p>
                       <p className="text-sm text-muted-foreground">
-                        After step one, click on the delete button above the
-                        table.
+                        Click on the Upload button in the upload interface.
+                      </p>
+                    </div>
+                  </li>
+                  <li className="flex">
+                    <div className="mr-3 flex h-7 w-7 items-center justify-center rounded-full border bg-muted text-sm font-medium">
+                      4
+                    </div>
+                    <div>
+                      <p className="font-medium">Done</p>
+                      <p className="text-sm text-muted-foreground">
+                        Navigate to the models section to see your model on
+                        Modelify.
                       </p>
                     </div>
                   </li>

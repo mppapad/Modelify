@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -24,52 +24,88 @@ import {
   Trash2,
   Code,
   ChevronRight,
+  PlayCircle,
+  Book,
+  Settings,
 } from "lucide-react";
 import Image from "next/image";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-interface GuideCardProps {
+interface QuickStartCardProps {
   icon: LucideIcon;
   title: string;
   description: string;
-  imageSrc: string;
+  href: string;
 }
 
 export default function DocumentationPage() {
   const [copied, setCopied] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+
+  // Simulate initial loading and handle refresh
+  useEffect(() => {
+    // Set loading state to true on initial load
+    setIsLoading(true);
+
+    // Simulate network delay/data fetching
+    const loadingTimer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+
+    // Listen for route changes
+    const handleRouteChange = () => {
+      setIsLoading(true);
+    };
+
+    // Listen for browser back/forward navigation
+    const handlePopState = () => {
+      setIsLoading(true);
+      setTimeout(() => setIsLoading(false), 1500);
+    };
+
+    // Set up event listeners for browser navigation
+    window.addEventListener("popstate", handlePopState);
+
+    // Cleanup function
+    return () => {
+      clearTimeout(loadingTimer);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
+
+  // Additional function for manual refresh
+  const handleRefresh = () => {
+    setIsLoading(true);
+    setTimeout(() => setIsLoading(false), 1500);
+  };
 
   const handleCopy = () => {
     navigator.clipboard
       .writeText(`import { Button } from "@/components/ui/button"
 
 export function Component() {
-  return <Button variant="outline">Click me</Button>
+  return <Button variant="outline">Get Started</Button>
 }`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Simulate loading for demo purposes
-  const toggleLoading = () => {
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 2000);
-  };
-
   return (
-    <div className="container mx-auto p-6">
+    <div className="container mx-auto px-4 py-6">
       <div className="flex flex-col space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold tracking-tight">Documentation</h1>
-          <Button onClick={toggleLoading}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <h1 className="text-3xl font-bold tracking-tight">Getting Started</h1>
+          <Button onClick={handleRefresh}>
             {isLoading ? "Loading..." : "Refresh"}
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Sidebar */}
-          <div className="md:col-span-1">
+          <div className="lg:col-span-1 order-2 lg:order-1">
             <Card className="sticky top-20">
               <CardHeader>
                 <CardTitle>Navigation</CardTitle>
@@ -78,7 +114,7 @@ export function Component() {
                 <nav className="flex flex-col space-y-1 px-4 pb-4">
                   <Button
                     variant="ghost"
-                    className="justify-start font-medium"
+                    className="justify-start text-primary font-medium"
                     asChild
                   >
                     <Link href="/dashboard/docs">
@@ -88,10 +124,10 @@ export function Component() {
                   </Button>
                   <Button
                     variant="ghost"
-                    className="justify-start text-primary font-medium"
+                    className="justify-start font-medium"
                     asChild
                   >
-                    <Link href="/dashboard/docs">
+                    <Link href="/dashboard/docs/upload-models">
                       <Upload className="mr-2 h-4 w-4" />
                       Upload Models
                     </Link>
@@ -122,7 +158,7 @@ export function Component() {
           </div>
 
           {/* Main Content */}
-          <div className="md:col-span-3">
+          <div className="lg:col-span-3 order-1 lg:order-2">
             {isLoading ? (
               <LoadingDocumentation />
             ) : (
@@ -131,207 +167,294 @@ export function Component() {
                 <Card className="mb-6">
                   <CardHeader>
                     <div className="flex items-center">
-                      <Upload className="mr-2 h-5 w-5" />
-                      <CardTitle>Upload 3D Models</CardTitle>
+                      <FileText className="mr-2 h-5 w-5" />
+                      <CardTitle>Welcome to the Platform</CardTitle>
                     </div>
                     <CardDescription>
-                      Learn how to upload and manage your 3D models in the
-                      platform
+                      Your guide to getting started with our 3D model platform
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <p className="text-muted-foreground mb-4">
-                      Our platform supports various 3D model formats including
-                      GLB, GLTF, and OBJ. Follow the guide below to upload your
-                      models and start creating immersive experiences.
+                      This platform allows you to upload, manage, and showcase
+                      3D models. Whether you're an artist, designer, or
+                      developer, our tools help you bring your creations to
+                      life.
                     </p>
 
                     <Alert className="mb-6">
                       <Info className="h-4 w-4" />
-                      <AlertTitle>Supported Formats</AlertTitle>
+                      <AlertTitle>Quick Tip</AlertTitle>
                       <AlertDescription>
-                        We recommend using GLB format for the best performance
-                        and compatibility.
+                        Complete your profile to unlock all features and
+                        personalize your experience.
                       </AlertDescription>
                     </Alert>
 
-                    <Tabs defaultValue="guide" className="mb-6">
-                      <TabsList>
-                        <TabsTrigger value="guide">
-                          Step-by-Step Guide
-                        </TabsTrigger>
-                        <TabsTrigger value="api">API Reference</TabsTrigger>
+                    <Tabs defaultValue="overview" className="mb-6">
+                      <TabsList className="grid w-full grid-cols-2 md:grid-cols-2">
+                        <TabsTrigger value="overview">Overview</TabsTrigger>
+                        <TabsTrigger value="quickstart">Quickstart</TabsTrigger>
                       </TabsList>
-                      <TabsContent value="guide" className="mt-2 space-y-4">
-                        <div className="rounded-lg border overflow-hidden">
-                          <div className="aspect-video relative bg-muted">
-                            <Image
-                              src="/placeholder.svg?height=400&width=800"
-                              alt="Upload interface screenshot"
-                              width={800}
-                              height={400}
-                              className="object-cover"
-                            />
-                          </div>
-                          <div className="p-4 space-y-2">
-                            <h3 className="font-medium">Upload Interface</h3>
-                            <p className="text-sm text-muted-foreground">
-                              The upload interface allows you to drag and drop
-                              files or browse your computer.
-                            </p>
+                      <TabsContent value="overview" className="mt-2 space-y-4">
+                        <div className="mb-6">
+                          <div className="rounded-lg border overflow-hidden">
+                            <div className="relative bg-muted">
+                              <Image
+                                src="/dashboard.png"
+                                alt="Dashboard interface"
+                                width={1920}
+                                height={1080}
+                                quality={100}
+                                priority
+                                className="w-full h-auto"
+                              />
+                            </div>
+                            <div className="p-4 space-y-2">
+                              <h3 className="font-medium">
+                                Platform Dashboard
+                              </h3>
+                              <p className="text-sm text-muted-foreground">
+                                Your dashboard gives you a comprehensive
+                                overview of your models, analytics, and account
+                                information.
+                              </p>
+                            </div>
                           </div>
                         </div>
 
                         <div className="space-y-4">
-                          <h3 className="text-lg font-medium">Upload Steps</h3>
+                          <h3 className="text-lg font-medium">Core Features</h3>
+                          <ul className="space-y-2">
+                            <li className="flex items-start">
+                              <div className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                <Check className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="font-medium">Model Management</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Upload, organize, and manage your 3D models in
+                                  one place
+                                </p>
+                              </div>
+                            </li>
+                            <li className="flex items-start">
+                              <div className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                <Check className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="font-medium">
+                                  Interactive Preview
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  View and interact with your 3D models in
+                                  real-time
+                                </p>
+                              </div>
+                            </li>
+                            <li className="flex items-start">
+                              <div className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                <Check className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="font-medium">
+                                  Sharing & Embedding
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  Share your models or embed them on your
+                                  website
+                                </p>
+                              </div>
+                            </li>
+                            <li className="flex items-start">
+                              <div className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                <Check className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="font-medium">
+                                  Analytics & Insights
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  Track views, interactions, and performance of
+                                  your models
+                                </p>
+                              </div>
+                            </li>
+                          </ul>
+                        </div>
+                      </TabsContent>
+                      <TabsContent
+                        value="quickstart"
+                        className="mt-2 space-y-4"
+                      >
+                        <div className="space-y-4">
+                          <h3 className="text-lg font-medium">
+                            Get Started in Minutes
+                          </h3>
                           <ol className="space-y-4">
                             <li className="flex">
-                              <div className="mr-3 flex h-7 w-7 items-center justify-center rounded-full border bg-muted text-sm font-medium">
+                              <div className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-muted text-sm font-medium">
                                 1
                               </div>
                               <div>
                                 <p className="font-medium">
-                                  Navigate to the Models section
+                                  Complete your profile
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                  Click on the "Models" tab in the main
-                                  dashboard navigation.
+                                  Add your information and preferences in the
+                                  account settings
                                 </p>
                               </div>
                             </li>
                             <li className="flex">
-                              <div className="mr-3 flex h-7 w-7 items-center justify-center rounded-full border bg-muted text-sm font-medium">
+                              <div className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-muted text-sm font-medium">
                                 2
                               </div>
                               <div>
                                 <p className="font-medium">
-                                  Click "Upload Model" button
+                                  Upload your first model
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                  Look for the upload button in the top-right
-                                  corner of the models page.
+                                  Go to the Models tab and click the "Upload
+                                  Model" button
                                 </p>
                               </div>
                             </li>
                             <li className="flex">
-                              <div className="mr-3 flex h-7 w-7 items-center justify-center rounded-full border bg-muted text-sm font-medium">
+                              <div className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-muted text-sm font-medium">
                                 3
                               </div>
                               <div>
                                 <p className="font-medium">
-                                  Select or drag your 3D model file
+                                  Customize your model settings
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                  Choose a GLB, GLTF, or OBJ file from your
-                                  computer.
+                                  Adjust lighting, background, and controls for
+                                  the best presentation
                                 </p>
                               </div>
                             </li>
                             <li className="flex">
-                              <div className="mr-3 flex h-7 w-7 items-center justify-center rounded-full border bg-muted text-sm font-medium">
+                              <div className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-muted text-sm font-medium">
                                 4
                               </div>
                               <div>
                                 <p className="font-medium">
-                                  Add metadata and publish
+                                  Share or embed your model
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                  Fill in the name, description, and tags for
-                                  your model, then click "Publish".
+                                  Generate a shareable link or embed code for
+                                  your website
                                 </p>
                               </div>
                             </li>
                           </ol>
                         </div>
                       </TabsContent>
-                      <TabsContent value="api" className="relative">
-                        <div className="bg-slate-900 text-slate-100 p-4 rounded-md mt-2 font-mono text-sm">
-                          <pre>{`// Upload a 3D model using the API
-const uploadModel = async (file) => {
-  const formData = new FormData();
-  formData.append('model', file);
-  
-  const response = await fetch('/api/models/upload', {
-    method: 'POST',
-    body: formData,
-  });
-  
-  return response.json();
-}`}</pre>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="absolute top-2 right-2"
-                          onClick={handleCopy}
-                        >
-                          {copied ? (
-                            <Check className="h-4 w-4" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TabsContent>
                     </Tabs>
                   </CardContent>
                   <CardFooter className="flex justify-between border-t pt-4">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href="/dashboard/docs">Getting Started</Link>
+                    <Button variant="outline" size="sm" disabled>
+                      Previous
                     </Button>
                     <Button variant="outline" size="sm" asChild>
-                      <Link href="/dashboard/docs/delete-models">
-                        Next: Delete Models
+                      <Link href="/dashboard/docs/upload-models">
+                        Next: Upload Models
                       </Link>
                     </Button>
                   </CardFooter>
                 </Card>
 
-                {/* Guide Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <GuideCard
-                    icon={Trash2}
-                    title="Deleting Models"
-                    description="Learn how to remove models from your account"
-                    imageSrc="/placeholder.svg?height=200&width=400"
+                {/* Quick Start Guide Cards */}
+                <h2 className="text-xl font-semibold mb-4">
+                  Quick Start Guides
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                  <QuickStartCard
+                    icon={Upload}
+                    title="Upload Models"
+                    description="Learn how to upload 3D models to your account"
+                    href="/dashboard/docs/upload-models"
                   />
-                  <GuideCard
+                  <QuickStartCard
+                    icon={Trash2}
+                    title="Delete Models"
+                    description="Delete your models"
+                    href="/dashboard/docs/delete-models"
+                  />
+                  <QuickStartCard
                     icon={Code}
-                    title="Export as iFrame"
-                    description="Embed your 3D models on any website"
-                    imageSrc="/placeholder.svg?height=200&width=400"
+                    title="Embed Models"
+                    description="Add models to your website or app"
+                    href="/dashboard/docs/iframe-export"
                   />
                 </div>
 
-                {/* Best Practices */}
+                {/* Resources Section */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center">
                       <Lightbulb className="h-5 w-5 mr-2 text-amber-500" />
-                      <CardTitle>Best Practices</CardTitle>
+                      <CardTitle>Learning Resources</CardTitle>
                     </div>
+                    <CardDescription>
+                      Access tutorials and documentation to help you get the
+                      most out of the platform
+                    </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>File Size Limitations</AlertTitle>
-                        <AlertDescription>
-                          Models larger than 50MB may cause performance issues.
-                          Consider optimizing your models before uploading.
-                        </AlertDescription>
-                      </Alert>
-
-                      <h4 className="font-medium text-lg">Optimization Tips</h4>
-                      <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                        <li>Reduce polygon count for better performance</li>
-                        <li>Compress textures to reduce file size</li>
-                        <li>Remove unnecessary nodes and animations</li>
-                        <li>Use draco compression for GLB/GLTF files</li>
-                        <li>
-                          Test your models on different devices before
-                          publishing
-                        </li>
-                      </ul>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Card className="border-dashed">
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center">
+                            <Book className="h-4 w-4 mr-2 text-primary" />
+                            <CardTitle className="text-base">
+                              Tutorials
+                            </CardTitle>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <p className="text-sm text-muted-foreground">
+                            Step-by-step guides to help you master the platform
+                          </p>
+                        </CardContent>
+                        <CardFooter className="pt-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-between"
+                          >
+                            View Tutorials{" "}
+                            <ChevronRight className="h-4 w-4 ml-2" />
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                      <Card className="border-dashed">
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center">
+                            <PlayCircle className="h-4 w-4 mr-2 text-primary" />
+                            <CardTitle className="text-base">
+                              Video Guides
+                            </CardTitle>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <p className="text-sm text-muted-foreground">
+                            Watch tutorials to learn how to use the platform
+                            effectively
+                          </p>
+                        </CardContent>
+                        <CardFooter className="pt-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-between"
+                          >
+                            Watch Videos{" "}
+                            <ChevronRight className="h-4 w-4 ml-2" />
+                          </Button>
+                        </CardFooter>
+                      </Card>
                     </div>
                   </CardContent>
                 </Card>
@@ -344,46 +467,26 @@ const uploadModel = async (file) => {
   );
 }
 
-function GuideCard({
+function QuickStartCard({
   icon: Icon,
   title,
   description,
-  imageSrc,
-}: GuideCardProps) {
-  // Determine the href based on the title
-  const getHref = () => {
-    if (title.includes("Delete")) return "/dashboard/docs/delete-models";
-    if (title.includes("iFrame") || title.includes("Export"))
-      return "/dashboard/docs/iframe-export";
-    return "/dashboard/docs";
-  };
-
+  href,
+}: QuickStartCardProps) {
   return (
-    <Card className="overflow-hidden">
-      <div className="aspect-video relative bg-muted">
-        <Image
-          src={imageSrc || "/placeholder.svg"}
-          alt={title}
-          width={400}
-          height={200}
-          className="object-cover w-full h-full"
-        />
-      </div>
-      <CardHeader>
+    <Card className="h-full flex flex-col">
+      <CardHeader className="pb-2">
         <div className="flex items-center">
-          <Icon className="mr-2 h-5 w-5" />
+          <Icon className="mr-2 h-5 w-5 text-primary" />
           <CardTitle className="text-lg">{title}</CardTitle>
         </div>
-        <CardDescription>{description}</CardDescription>
       </CardHeader>
-      <CardContent className="pb-2">
-        <p className="text-sm text-muted-foreground">
-          Follow our step-by-step guide to learn everything about this feature.
-        </p>
+      <CardContent className="pb-2 flex-grow">
+        <p className="text-sm text-muted-foreground">{description}</p>
       </CardContent>
       <CardFooter>
         <Button variant="ghost" className="w-full justify-between" asChild>
-          <Link href={getHref()}>
+          <Link href={href}>
             View Guide <ChevronRight className="h-4 w-4 ml-2" />
           </Link>
         </Button>
@@ -398,74 +501,137 @@ function LoadingDocumentation() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Skeleton className="h-5 w-5 rounded-full" />
-            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-6 w-6 rounded-full" />
+            <Skeleton className="h-8 w-64" />
           </div>
           <Skeleton className="h-4 w-full max-w-md mt-2" />
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
 
-          <div className="rounded-lg border p-4 space-y-4">
-            <Skeleton className="h-4 w-32" />
+          <div className="rounded-lg border p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-4 w-4 rounded-full" />
+              <Skeleton className="h-5 w-32" />
+            </div>
             <Skeleton className="h-4 w-full" />
           </div>
 
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full max-w-xs rounded-md" />
-            <div className="p-4 space-y-4">
-              <div className="aspect-video">
-                <Skeleton className="h-full w-full rounded-md" />
+          <div className="space-y-4">
+            <div className="border-b">
+              <div className="flex gap-2">
+                <Skeleton className="h-10 w-24 rounded-md" />
+                <Skeleton className="h-10 w-24 rounded-md" />
+                <Skeleton className="h-10 w-24 rounded-md" />
               </div>
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-lg border overflow-hidden">
+                <div className="aspect-video">
+                  <Skeleton className="h-full w-full" />
+                </div>
+                <div className="p-4 space-y-2">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Skeleton className="h-6 w-36" />
+
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="h-7 w-7 rounded-full shrink-0" />
+                    <div className="space-y-1 w-full">
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-4 w-full" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="h-7 w-7 rounded-full shrink-0" />
+                    <div className="space-y-1 w-full">
+                      <Skeleton className="h-5 w-40" />
+                      <Skeleton className="h-4 w-full" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="h-7 w-7 rounded-full shrink-0" />
+                    <div className="space-y-1 w-full">
+                      <Skeleton className="h-5 w-36" />
+                      <Skeleton className="h-4 w-full" />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
         <CardFooter className="border-t pt-4 flex justify-between">
-          <Skeleton className="h-9 w-32 rounded-md" />
+          <Skeleton className="h-9 w-24 rounded-md" />
           <Skeleton className="h-9 w-32 rounded-md" />
         </CardFooter>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <div className="aspect-video">
-            <Skeleton className="h-full w-full" />
-          </div>
-          <CardHeader>
-            <Skeleton className="h-6 w-32" />
-            <Skeleton className="h-4 w-full max-w-xs" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4 mt-2" />
-          </CardContent>
-          <CardFooter>
-            <Skeleton className="h-9 w-full rounded-md" />
-          </CardFooter>
-        </Card>
+      <Skeleton className="h-8 w-48 mb-4" />
 
-        <Card>
-          <div className="aspect-video">
-            <Skeleton className="h-full w-full" />
-          </div>
-          <CardHeader>
-            <Skeleton className="h-6 w-32" />
-            <Skeleton className="h-4 w-full max-w-xs" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4 mt-2" />
-          </CardContent>
-          <CardFooter>
-            <Skeleton className="h-9 w-full rounded-md" />
-          </CardFooter>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        {[...Array(3)].map((_, i) => (
+          <Card key={i}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-5 w-5 rounded-full" />
+                <Skeleton className="h-6 w-32" />
+              </div>
+            </CardHeader>
+            <CardContent className="pb-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4 mt-2" />
+            </CardContent>
+            <CardFooter>
+              <Skeleton className="h-9 w-full rounded-md" />
+            </CardFooter>
+          </Card>
+        ))}
       </div>
+
+      {/* Learning Resources Section Loading Skeleton */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-5 rounded-full" />
+            <Skeleton className="h-6 w-48" />
+          </div>
+          <Skeleton className="h-4 w-full max-w-md mt-1" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[...Array(2)].map((_, i) => (
+              <Card key={i} className="border-dashed">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-4 rounded-full" />
+                    <Skeleton className="h-5 w-32" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4 mt-1" />
+                </CardContent>
+                <CardFooter className="pt-0">
+                  <Skeleton className="h-8 w-full rounded-md" />
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
