@@ -58,11 +58,6 @@ const data = {
   ],
   navSecondary: [
     {
-      title: "Recycling Bin",
-      url: "/dashboard/trash",
-      icon: Trash2,
-    },
-    {
       title: "Knowledge Base",
       url: "/dashboard/docs",
       icon: FileText,

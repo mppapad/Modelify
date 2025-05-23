@@ -1,73 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import {
-  Trash2,
-  RefreshCcw,
-  Search,
-  Filter,
-  Download,
-  MoreHorizontal,
-  Plus,
-} from "lucide-react";
-import { useRouter } from "next/navigation";
-// Custom hook for media queries
-const useMediaQuery = (query: string): boolean => {
-  const [matches, setMatches] = useState(false);
-
-  useEffect(() => {
-    // Check if we're in a browser environment
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const mediaQueryList = window.matchMedia(query);
-
-    // Set the initial value
-    const updateMatches = () => {
-      setMatches(mediaQueryList.matches);
-    };
-
-    // Set up initial state
-    updateMatches();
-
-    // Set up event listener for changes
-    mediaQueryList.addEventListener("change", updateMatches);
-
-    // Clean up event listener
-    return () => {
-      mediaQueryList.removeEventListener("change", updateMatches);
-    };
-  }, [query]);
-
-  return matches;
-};
-
-// Import shadcn/ui components
+import Link from "next/link";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,582 +21,804 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+  Search,
+  MoreVertical,
+  Download,
+  Trash2,
+  Eye,
+  Upload,
+  Filter,
+  Globe,
+  Lock,
+  Edit,
+  Loader2,
+  RefreshCcw,
+  FileText,
+} from "lucide-react";
 
-// Define the model type
-interface Model3D {
-  id: string;
+interface Model {
+  $id?: string; // Appwrite uses $id
+  id?: string; // Fallback for compatibility
   name: string;
   description: string;
-  fileSize: string;
-  fileType: string;
-  uploadDate: string;
-  modelType: string;
+  fileId: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  userId: string;
+  isPublic?: boolean;
+  createdAt: string;
 }
 
+// Loading Skeleton Components
+const ModelRowSkeleton = () => (
+  <Card className="mb-4">
+    <CardContent className="p-4 lg:p-6">
+      <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+        {/* File icon skeleton */}
+        <div className="w-12 h-12 bg-gray-200 rounded-lg animate-pulse flex-shrink-0"></div>
+
+        {/* Content skeleton */}
+        <div className="flex-1 min-w-0 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="flex-1 space-y-2">
+              <div className="h-5 bg-gray-200 rounded animate-pulse w-48 max-w-full"></div>
+              <div className="h-4 bg-gray-200 rounded animate-pulse w-32 max-w-full"></div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="h-6 bg-gray-200 rounded-full animate-pulse w-12"></div>
+              <div className="h-6 bg-gray-200 rounded-full animate-pulse w-16"></div>
+            </div>
+          </div>
+          <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4 max-w-full"></div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="h-3 bg-gray-200 rounded animate-pulse w-24"></div>
+            <div className="flex gap-2 flex-wrap">
+              <div className="h-8 bg-gray-200 rounded animate-pulse w-16"></div>
+              <div className="h-8 bg-gray-200 rounded animate-pulse w-20"></div>
+              <div className="h-8 bg-gray-200 rounded animate-pulse w-8"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+);
+
+const StatCardSkeleton = () => (
+  <Card>
+    <CardContent className="p-4 lg:p-6">
+      <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3 mb-2"></div>
+      <div className="h-8 bg-gray-200 rounded animate-pulse w-1/3"></div>
+    </CardContent>
+  </Card>
+);
+
 export default function ModelsPage() {
+  const [models, setModels] = useState<Model[]>([]);
+  const [filteredModels, setFilteredModels] = useState<Model[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<string>("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingModel, setEditingModel] = useState<Model | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editIsPublic, setEditIsPublic] = useState(false);
+  const [updatingModel, setUpdatingModel] = useState(false);
+  // Add state to track dropdown open status
+  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
+
+  // Helper function to get the model ID (handles both $id and id)
+  const getModelId = (model: Model): string => {
+    return model.$id || model.id || "";
+  };
+
   useEffect(() => {
-    document.title = "3D Model Viewer | My Models";
-  }, []);
-
-  const router = useRouter();
-  const [models, setModels] = useState<Model3D[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [embedModalOpen, setEmbedModalOpen] = useState(false);
-  const [currentEmbedCode, setCurrentEmbedCode] = useState("");
-  const [currentModelName, setCurrentModelName] = useState("");
-  const isDesktop = useMediaQuery("(min-width: 768px)");
-
-  // Fetch models
-  useEffect(() => {
-    const fetchModels = async () => {
-      setIsLoading(true);
-      try {
-        // Replace with your actual API call
-        // const response = await fetch('/api/models');
-        // const data = await response.json();
-        // setModels(data);
-
-        // Mock data for development purposes
-        setTimeout(() => {
-          const mockData: Model3D[] = [
-            {
-              id: "1",
-              name: "Robot Character",
-              description: "Animated robot character for game project",
-              fileSize: "24.5 MB",
-              fileType: "glb",
-              uploadDate: "2025-04-12",
-              modelType: "Character",
-            },
-            {
-              id: "2",
-              name: "Modern Chair",
-              description: "Furniture model for interior design visualization",
-              fileSize: "12.3 MB",
-              fileType: "glb",
-              uploadDate: "2025-04-15",
-              modelType: "Furniture",
-            },
-            {
-              id: "3",
-              name: "Fantasy Sword",
-              description: "Game asset with PBR materials",
-              fileSize: "5.7 MB",
-              fileType: "glb",
-              uploadDate: "2025-05-01",
-              modelType: "Prop",
-            },
-            {
-              id: "4",
-              name: "Low Poly Tree",
-              description: "Environmental asset for outdoor scenes",
-              fileSize: "2.1 MB",
-              fileType: "glb",
-              uploadDate: "2025-05-03",
-              modelType: "Environment",
-            },
-          ];
-          setModels(mockData);
-          setIsLoading(false);
-        }, 1000);
-      } catch (error) {
-        console.error("Failed to fetch models:", error);
-        toast("Error", {
-          description: "Failed to load models. Please try again.",
-        });
-        setIsLoading(false);
-      }
-    };
-
     fetchModels();
   }, []);
 
-  // Filter models based on search query
-  const filteredModels = models.filter(
-    (model) =>
-      model.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      model.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      model.modelType.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    let filtered = models;
 
-  // Handle model move to recycling bin
-  const handleMoveToRecycleBin = async (modelId: string) => {
-    try {
-      // Replace with your actual API call
-      // await fetch(`/api/models/${modelId}/recycle`, { method: 'POST' });
-
-      // Mock successful move
-      setModels(models.filter((model) => model.id !== modelId));
-      toast("Success", {
-        description: "Model has been moved to recycling bin.",
-      });
-    } catch (error) {
-      console.error("Failed to move model to recycling bin:", error);
-      toast("Error", {
-        description: "Failed to move model to recycling bin. Please try again.",
-      });
-    }
-  };
-
-  // Handle bulk move to recycling bin
-  const handleBulkMoveToRecycleBin = async () => {
-    try {
-      // Replace with your actual API call
-      // await Promise.all(selectedItems.map(id => fetch(`/api/models/${id}/recycle`, { method: 'POST' })));
-
-      // Mock successful bulk move
-      setModels(models.filter((model) => !selectedItems.includes(model.id)));
-      toast("Success", {
-        description: `${selectedItems.length} models have been moved to recycling bin.`,
-      });
-      setSelectedItems([]);
-    } catch (error) {
-      console.error("Failed to bulk move models to recycling bin:", error);
-      toast("Error", {
-        description:
-          "Failed to move some models to recycling bin. Please try again.",
-      });
-    }
-  };
-
-  // Handle select all
-  const handleSelectAll = () => {
-    if (selectedItems.length === filteredModels.length) {
-      setSelectedItems([]);
-    } else {
-      setSelectedItems(filteredModels.map((model) => model.id));
-    }
-  };
-
-  // Handle single item selection
-  const handleSelectItem = (modelId: string) => {
-    if (selectedItems.includes(modelId)) {
-      setSelectedItems(selectedItems.filter((id) => id !== modelId));
-    } else {
-      setSelectedItems([...selectedItems, modelId]);
-    }
-  };
-
-  // Generate embed code
-  const getEmbedCode = (modelId: string): string => {
-    return `<iframe src="/view/${modelId}" width="600" height="400" frameborder="0" allowfullscreen></iframe>`;
-  };
-
-  // Open embed modal/drawer
-  const openEmbedModal = (model: Model3D) => {
-    setCurrentEmbedCode(getEmbedCode(model.id));
-    setCurrentModelName(model.name);
-    setEmbedModalOpen(true);
-  };
-
-  // Copy embed code to clipboard
-  const copyEmbedCode = () => {
-    navigator.clipboard.writeText(currentEmbedCode);
-    toast("Copied", {
-      description: "Embed code copied to clipboard",
-    });
-    setEmbedModalOpen(false);
-  };
-
-  // Embed Code Modal/Drawer Component
-  const EmbedCodeModal = () => {
-    if (isDesktop) {
-      return (
-        <Dialog open={embedModalOpen} onOpenChange={setEmbedModalOpen}>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Embed Code for {currentModelName}</DialogTitle>
-              <DialogDescription>
-                Copy this code to embed the 3D model on your website.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <Textarea readOnly value={currentEmbedCode} className="h-24" />
-              <Button onClick={copyEmbedCode}>Copy to clipboard</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (model) =>
+          model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          model.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          model.fileName?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
+    if (filterType !== "all") {
+      filtered = filtered.filter(
+        (model) =>
+          getFileExtension(model.fileName).toLowerCase() ===
+          filterType.toLowerCase()
+      );
+    }
+
+    setFilteredModels(filtered);
+  }, [models, searchTerm, filterType]);
+
+  const fetchModels = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/models/my-models");
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch models");
+      }
+
+      const data = await response.json();
+      console.log("Fetched models:", data.models);
+      setModels(data.models || []);
+    } catch (error) {
+      console.error("Error fetching models:", error);
+      toast.error("Failed to fetch models. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteModel = async (modelId: string) => {
+    if (!modelId || modelId === "undefined") {
+      console.error("Invalid model ID:", modelId);
+      toast.error("Error: Invalid model ID");
+      return;
+    }
+
+    console.log("Deleting model with ID:", modelId);
+
+    try {
+      setDeletingId(modelId);
+
+      const response = await fetch(`/api/models/delete/${modelId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete model");
+      }
+
+      const result = await response.json();
+
+      setModels((prev) =>
+        prev.filter((model) => getModelId(model) !== modelId)
+      );
+      toast.success(result.message || "Model deleted successfully.");
+    } catch (error) {
+      console.error("Error deleting model:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to delete model. Please try again."
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const updateModel = async () => {
+    if (!editingModel) return;
+
+    const modelId = getModelId(editingModel);
+    if (!modelId) {
+      toast.error("Invalid model ID");
+      return;
+    }
+
+    try {
+      setUpdatingModel(true);
+      const response = await fetch(`/api/models/update/${modelId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: editName,
+          description: editDescription,
+          isPublic: editIsPublic,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update model");
+      }
+
+      const updatedModel = await response.json();
+
+      setModels(
+        models.map((model) =>
+          getModelId(model) === modelId ? { ...model, ...updatedModel } : model
+        )
+      );
+
+      closeEditModal();
+      toast.success("Model updated successfully.");
+    } catch (error) {
+      console.error("Failed to update model:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to update model. Please try again."
+      );
+    } finally {
+      setUpdatingModel(false);
+    }
+  };
+
+  const downloadModel = async (model: Model) => {
+    try {
+      const fileUrl = getFileUrl(model.fileId, true);
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.download = model.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Model download started.");
+    } catch (error) {
+      console.error("Error downloading model:", error);
+      toast.error("Failed to download model. Please try again.");
+    }
+  };
+
+  const exportModelsData = async () => {
+    try {
+      setExporting(true);
+
+      const exportData = models.map((model) => ({
+        id: getModelId(model),
+        name: model.name,
+        description: model.description,
+        fileName: model.fileName,
+        fileSize: model.fileSize,
+        mimeType: model.mimeType,
+        createdAt: model.createdAt,
+        isPublic: model.isPublic,
+      }));
+
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataUri =
+        "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
+
+      const exportFileDefaultName = `models-export-${
+        new Date().toISOString().split("T")[0]
+      }.json`;
+
+      const linkElement = document.createElement("a");
+      linkElement.setAttribute("href", dataUri);
+      linkElement.setAttribute("download", exportFileDefaultName);
+      linkElement.click();
+
+      toast.success("Models data exported successfully.");
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      toast.error("Failed to export data. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Fixed openEditModal function to properly handle dropdown closure
+  const openEditModal = (model: Model) => {
+    console.log("Opening edit modal for model:", model);
+
+    // Close any open dropdown first
+    setDropdownOpen(null);
+
+    // Small delay to ensure dropdown is closed before opening modal
+    setTimeout(() => {
+      setEditingModel(model);
+      setEditName(model.name);
+      setEditDescription(model.description);
+      setEditIsPublic(model.isPublic || false);
+      setEditModalOpen(true);
+    }, 100);
+  };
+
+  const closeEditModal = () => {
+    setEditModalOpen(false);
+    setEditingModel(null);
+    setEditName("");
+    setEditDescription("");
+    setEditIsPublic(false);
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const getFileExtension = (fileName: string): string => {
+    return fileName.split(".").pop()?.toLowerCase() || "unknown";
+  };
+
+  const getFileTypeColor = (fileName: string) => {
+    const extension = getFileExtension(fileName);
+    switch (extension) {
+      case "glb":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "gltf":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "usdz":
+        return "bg-purple-100 text-purple-800 border-purple-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
+  const getFileIcon = (fileName: string) => {
+    const extension = getFileExtension(fileName);
     return (
-      <Drawer open={embedModalOpen} onOpenChange={setEmbedModalOpen}>
-        <DrawerContent>
-          <DrawerHeader className="text-left">
-            <DrawerTitle>Embed Code for {currentModelName}</DrawerTitle>
-            <DrawerDescription>
-              Copy this code to embed the 3D model on your website.
-            </DrawerDescription>
-          </DrawerHeader>
-          <div className="px-4 py-2">
-            <Textarea readOnly value={currentEmbedCode} className="h-24 mb-4" />
-          </div>
-          <DrawerFooter className="pt-2">
-            <Button onClick={copyEmbedCode}>Copy to clipboard</Button>
-            <DrawerClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
+      <div
+        className={`w-12 h-12 rounded-lg flex items-center justify-center ${getFileTypeColor(
+          fileName
+        )} border`}
+      >
+        <FileText className="w-6 h-6" />
+      </div>
     );
   };
 
-  // Loading skeleton
-  if (isLoading) {
-    return (
-      <div className="space-y-4 p-4 md:p-8">
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-10 w-64" />
-          <Skeleton className="h-10 w-32" />
-        </div>
-        <Skeleton className="h-12 w-full" />
-        <div className="space-y-2">
-          {Array(4)
-            .fill(null)
-            .map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
-            ))}
-        </div>
-      </div>
-    );
-  }
+  const getFileUrl = (fileId: string, download = false) => {
+    const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
+    const bucketId = process.env.NEXT_PUBLIC_BUCKET_ID;
+    const downloadParam = download ? "?download=true" : "";
+    return `${endpoint}/storage/buckets/${bucketId}/files/${fileId}/view${downloadParam}`;
+  };
+
+  const statsData = [
+    {
+      title: "Total Models",
+      value: models.length,
+    },
+    {
+      title: "GLB Files",
+      value: models.filter((m) => getFileExtension(m.fileName) === "glb")
+        .length,
+    },
+    {
+      title: "GLTF Files",
+      value: models.filter((m) => getFileExtension(m.fileName) === "gltf")
+        .length,
+    },
+    {
+      title: "USDZ Files",
+      value: models.filter((m) => getFileExtension(m.fileName) === "usdz")
+        .length,
+    },
+  ];
 
   return (
-    <div className="space-y-4 p-4 md:p-8">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-2xl font-bold">
-                Models Gallery
-              </CardTitle>
-              <CardDescription>Manage your 3D model collection</CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => router.push("./trash")}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Recycling Bin
-              </Button>
-              <Button onClick={() => router.push("./upload")}>
-                <Plus className="mr-2 h-4 w-4" />
+    <div className="w-full max-w-full overflow-hidden">
+      <div className="container mx-auto p-4 lg:p-6 space-y-6 max-w-full">
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl lg:text-3xl font-bold truncate">
+              3D Models
+            </h1>
+            <p className="text-muted-foreground text-sm lg:text-base">
+              Manage your uploaded 3D models
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+            <Button
+              onClick={() => {
+                setSearchTerm("");
+                fetchModels();
+                toast.success("Model list refreshed");
+              }}
+              disabled={loading}
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none"
+            >
+              <RefreshCcw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+            <Button
+              onClick={exportModelsData}
+              disabled={exporting || models.length === 0}
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {exporting ? "Exporting..." : "Export Data"}
+            </Button>
+            <Link href="/dashboard/upload" className="flex-1 sm:flex-none">
+              <Button size="sm" className="w-full">
+                <Upload className="w-4 h-4 mr-2" />
                 Upload Model
               </Button>
-            </div>
+            </Link>
           </div>
-        </CardHeader>
-        <CardContent>
-          {/* Actions Bar */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-            <div className="relative w-full md:w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search models..."
-                className="pl-8"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+        </div>
 
-            <div className="flex gap-2 w-full md:w-auto">
-              {selectedItems.length > 0 && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-1">
-                      <Trash2 className="h-4 w-4" />
-                      <span className="ml-1">
-                        Delete ({selectedItems.length})
-                      </span>
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        Move to recycling bin?
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will move {selectedItems.length} selected model(s)
-                        to the recycling bin. You can restore them later if
-                        needed.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleBulkMoveToRecycleBin}>
-                        Continue
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Filter className="h-4 w-4 mr-1" /> Filter
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-64">
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Filter by model type</h4>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge
-                        variant="outline"
-                        className="cursor-pointer hover:bg-secondary"
-                      >
-                        Character
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className="cursor-pointer hover:bg-secondary"
-                      >
-                        Furniture
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className="cursor-pointer hover:bg-secondary"
-                      >
-                        Prop
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className="cursor-pointer hover:bg-secondary"
-                      >
-                        Environment
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className="cursor-pointer hover:bg-secondary"
-                      >
-                        Vehicle
-                      </Badge>
+        {/* Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+          {loading
+            ? Array.from({ length: 4 }).map((_, index) => (
+                <StatCardSkeleton key={`stat-skeleton-${index}`} />
+              ))
+            : statsData.map((stat, index) => (
+                <Card key={`stat-${index}`}>
+                  <CardContent className="p-4 lg:p-6">
+                    <div className="text-xs lg:text-sm font-medium text-muted-foreground mb-2">
+                      {stat.title}
                     </div>
-                    <h4 className="font-medium">File type</h4>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge
-                        variant="outline"
-                        className="cursor-pointer hover:bg-secondary"
-                      >
-                        GLB
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className="cursor-pointer hover:bg-secondary"
-                      >
-                        USDZ
-                      </Badge>
+                    <div className="text-xl lg:text-2xl font-bold">
+                      {stat.value}
                     </div>
-                    <Button size="sm" className="w-full">
-                      Apply Filters
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+                  </CardContent>
+                </Card>
+              ))}
+        </div>
 
+        {/* Search and Filter */}
+        <div className="flex flex-col sm:flex-row gap-3 lg:gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Input
+              placeholder="Search models..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+              disabled={loading}
+            />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery("");
-                  toast("Refreshed", {
-                    description: "Model list has been refreshed",
-                  });
-                }}
+                disabled={loading}
+                className="w-full sm:w-auto"
               >
-                <RefreshCcw className="h-4 w-4 mr-1" /> Refresh
+                <Filter className="w-4 h-4 mr-2" />
+                {filterType === "all" ? "All Types" : filterType.toUpperCase()}
               </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setFilterType("all")}>
+                All Types
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterType("glb")}>
+                GLB Files
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterType("gltf")}>
+                GLTF Files
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterType("usdz")}>
+                USDZ Files
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Models List */}
+        <div className="space-y-4">
+          {loading ? (
+            // Loading skeletons
+            Array.from({ length: 6 }).map((_, index) => (
+              <ModelRowSkeleton key={`skeleton-${index}`} />
+            ))
+          ) : filteredModels.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-muted-foreground text-sm lg:text-base">
+                {searchTerm || filterType !== "all"
+                  ? "No models match your search criteria"
+                  : "No models found. Upload your first 3D model to get started."}
+              </div>
+              {!searchTerm && filterType === "all" && (
+                <Link href="/dashboard/upload">
+                  <Button className="mt-4" size="sm">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload Your First Model
+                  </Button>
+                </Link>
+              )}
             </div>
-          </div>
+          ) : (
+            filteredModels.map((model) => {
+              const modelId = getModelId(model);
+              const isDeleting = deletingId === modelId;
 
-          {/* Models Table */}
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300"
-                        checked={
-                          filteredModels.length > 0 &&
-                          selectedItems.length === filteredModels.length
-                        }
-                        onChange={handleSelectAll}
-                      />
-                    </div>
-                  </TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    File Details
-                  </TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    Upload Date
-                  </TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    Model Type
-                  </TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredModels.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
-                      <div className="flex flex-col items-center justify-center">
-                        <p className="text-muted-foreground mb-2">
-                          No models found
-                        </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSearchQuery("")}
-                        >
-                          Clear filters
-                        </Button>
+              return (
+                <Card
+                  key={modelId}
+                  className="hover:shadow-md transition-shadow"
+                >
+                  <CardContent className="p-4 lg:p-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                      {/* File Icon */}
+                      <div className="flex-shrink-0">
+                        {getFileIcon(model.fileName)}
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredModels.map((model) => (
-                    <TableRow key={model.id}>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-gray-300"
-                            checked={selectedItems.includes(model.id)}
-                            onChange={() => handleSelectItem(model.id)}
-                          />
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-base lg:text-lg font-semibold truncate">
+                              {model.name}
+                            </h3>
+                            <p className="text-xs lg:text-sm text-muted-foreground truncate">
+                              {model.fileName} •{" "}
+                              {formatFileSize(model.fileSize)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge
+                              className={getFileTypeColor(model.fileName)}
+                              variant="outline"
+                            >
+                              {getFileExtension(model.fileName).toUpperCase()}
+                            </Badge>
+                            {model.isPublic ? (
+                              <Badge
+                                variant="outline"
+                                className="text-green-700 border-green-200"
+                              >
+                                <Globe className="w-3 h-3 mr-1" />
+                                Public
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline">
+                                <Lock className="w-3 h-3 mr-1" />
+                                Private
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{model.name}</span>
-                          <span className="text-sm text-muted-foreground truncate max-w-64">
+
+                        {model.description && (
+                          <p className="text-xs lg:text-sm text-muted-foreground line-clamp-2">
                             {model.description}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <div className="flex items-center">
-                          <Badge variant="outline" className="mr-2">
-                            {model.fileType.toUpperCase()}
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {model.fileSize}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {format(new Date(model.uploadDate), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <Badge>{model.modelType}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => router.push(`/view/${model.id}`)}
-                          >
-                            <Search className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              toast("Download started", {
-                                description: `Downloading ${model.name}...`,
-                              });
-                            }}
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => router.push(`/edit/${model.id}`)}
-                              >
-                                Edit details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onSelect={(e) => {
-                                  e.preventDefault();
-                                  openEmbedModal(model);
-                                }}
-                              >
-                                Get embed code
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-red-600"
-                                onClick={() => {
-                                  handleMoveToRecycleBin(model.id);
-                                }}
-                              >
-                                Move to recycling bin
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                          </p>
+                        )}
 
-          {/* Pagination */}
-          <div className="flex items-center justify-end space-x-2 py-4">
-            <Button variant="outline" size="sm" disabled>
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" className="px-4">
-              1
-            </Button>
-            <Button variant="outline" size="sm" disabled>
-              Next
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="text-xs text-muted-foreground">
+                            Uploaded{" "}
+                            {format(new Date(model.createdAt), "MMM d, yyyy")}
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 sm:flex-none"
+                            >
+                              <Eye className="w-4 h-4 mr-1" />
+                              View
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => downloadModel(model)}
+                              className="flex-1 sm:flex-none"
+                            >
+                              <Download className="w-4 h-4 mr-1" />
+                              Download
+                            </Button>
+                            <DropdownMenu
+                              open={dropdownOpen === modelId}
+                              onOpenChange={(open) =>
+                                setDropdownOpen(open ? modelId : null)
+                              }
+                            >
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={isDeleting}
+                                >
+                                  {isDeleting ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <MoreVertical className="w-4 h-4" />
+                                  )}
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => {}}>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => openEditModal(model)}
+                                >
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => downloadModel(model)}
+                                >
+                                  <Download className="w-4 h-4 mr-2" />
+                                  Download
+                                </DropdownMenuItem>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => e.preventDefault()}
+                                      className="text-red-600 focus:text-red-600"
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>
+                                        Delete Model
+                                      </AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to delete "
+                                        {model.name}"? This action cannot be
+                                        undone and will permanently remove the
+                                        model from both the database and
+                                        storage.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>
+                                        Cancel
+                                      </AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => deleteModel(modelId)}
+                                        disabled={isDeleting}
+                                        className="bg-red-600 hover:bg-red-700"
+                                      >
+                                        {isDeleting ? "Deleting..." : "Delete"}
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+        </div>
 
-      {/* Embed Code Modal/Drawer */}
-      <EmbedCodeModal />
+        {/* Edit Model Dialog - Improved accessibility and focus management */}
+        <Dialog
+          open={editModalOpen}
+          onOpenChange={(open) => {
+            if (!open && !updatingModel) {
+              closeEditModal();
+            }
+          }}
+        >
+          <DialogContent
+            className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto"
+            onPointerDownOutside={(e) => {
+              if (updatingModel) {
+                e.preventDefault();
+              }
+            }}
+            onEscapeKeyDown={(e) => {
+              if (updatingModel) {
+                e.preventDefault();
+              }
+            }}
+            // Ensure proper focus management
+            onOpenAutoFocus={(e) => {
+              // Prevent autofocus if there are other modals open
+              if (dropdownOpen) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Edit Model</DialogTitle>
+              <DialogDescription>
+                Update your model details and visibility settings.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Model name"
+                  disabled={updatingModel}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={3}
+                  placeholder="Model description"
+                  className="resize-none"
+                  disabled={updatingModel}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="edit-public"
+                  checked={editIsPublic}
+                  onCheckedChange={setEditIsPublic}
+                  disabled={updatingModel}
+                />
+                <Label
+                  htmlFor="edit-public"
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  {editIsPublic ? (
+                    <Globe className="w-4 h-4" />
+                  ) : (
+                    <Lock className="w-4 h-4" />
+                  )}
+                  {editIsPublic ? "Public" : "Private"}
+                </Label>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                <Button
+                  onClick={updateModel}
+                  className="flex-1"
+                  disabled={updatingModel}
+                >
+                  {updatingModel ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={closeEditModal}
+                  className="flex-1"
+                  disabled={updatingModel}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   Maximize,
   ArrowUpRight,
   Eye,
+  Calendar,
 } from "lucide-react";
 
 // Import shadcn components
@@ -23,6 +24,24 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+
+// Types
+interface DashboardStats {
+  totalModels: number;
+  activeModels: number;
+  totalViews: string;
+  storageUsed: number;
+  storageLimit: number;
+  storagePercentage: number;
+  recentModels: Array<{
+    $id: string;
+    name: string;
+    description: string;
+    createdAt: string;
+    views: number;
+    isPublic: boolean;
+  }>;
+}
 
 // Navbar component (simplified version)
 function Navbar() {
@@ -49,26 +68,46 @@ export default function DashboardPage() {
     document.title = "Modelify | Dashboard";
   }, []);
 
-  // Loading state
+  // State management
   const [isLoading, setIsLoading] = useState(true);
-
-  // Simulate loading
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Data with values set as requested
-  const data = {
+  const [data, setData] = useState<DashboardStats>({
     totalModels: 0,
     activeModels: 0,
-    totalViews: "N/A",
+    totalViews: "0",
     storageUsed: 0,
     storageLimit: 500,
     storagePercentage: 0,
+    recentModels: [],
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch dashboard data
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      try {
+        const response = await fetch("/api/dashboard/stats");
+        if (!response.ok) {
+          throw new Error("Failed to fetch dashboard stats");
+        }
+        const stats = await response.json();
+        setData(stats);
+      } catch (err) {
+        console.error("Error fetching dashboard stats:", err);
+        setError("Failed to load dashboard data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardStats();
+  }, []);
+
+  // Format date helper
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
   };
 
   return (
@@ -101,11 +140,20 @@ export default function DashboardPage() {
                 className="mt-4 md:mt-0 bg-black hover:bg-gray-800 text-white"
                 onClick={() => (window.location.href = "/dashboard/upload")}
               >
-                <Upload className="mr-2 h-5 w-5" />
-                Upload New Model
+                <Upload className=" h-5 w-5" />
+                Upload
               </Button>
             )}
           </div>
+
+          {/* Error State */}
+          {error && !isLoading && (
+            <Card className="mb-8 border-red-200 bg-red-50">
+              <CardContent className="pt-6">
+                <p className="text-red-600">{error}</p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Stats Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8">
@@ -131,7 +179,7 @@ export default function DashboardPage() {
                   <>
                     <div className="text-2xl font-bold">{data.totalModels}</div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {data.activeModels} active models
+                      {data.activeModels} public models
                     </p>
                   </>
                 )}
@@ -200,7 +248,9 @@ export default function DashboardPage() {
                   <>
                     <div className="text-2xl font-bold">{data.totalViews}</div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Start uploading to track views
+                      {data.totalModels > 0
+                        ? "Across all your models"
+                        : "Start uploading to track views"}
                     </p>
                   </>
                 )}
@@ -270,7 +320,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Recent Models - Empty State */}
+            {/* Recent Models */}
             <Card className="relative overflow-hidden">
               <CardHeader className="relative">
                 {isLoading ? (
@@ -304,6 +354,58 @@ export default function DashboardPage() {
                         <Skeleton className="h-3 w-28" />
                       </div>
                     </div>
+                  </div>
+                ) : data.recentModels.length > 0 ? (
+                  <div className="space-y-4">
+                    {data.recentModels.map((model) => (
+                      <div
+                        key={model.$id}
+                        className="flex items-center space-x-4 p-2 rounded-lg hover:bg-gray-50"
+                      >
+                        <div className="h-12 w-12 rounded bg-gray-100 flex items-center justify-center">
+                          <Layers className="h-6 w-6 text-gray-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-medium text-gray-900 truncate">
+                            {model.name}
+                          </h4>
+                          <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            <span>{formatDate(model.createdAt)}</span>
+                            <span>•</span>
+                            <Eye className="h-3 w-3" />
+                            <span>{model.views} views</span>
+                            {model.isPublic && (
+                              <>
+                                <span>•</span>
+                                <span className="text-green-600">Public</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            (window.location.href = `/dashboard/models/${model.$id}`)
+                          }
+                        >
+                          <ArrowUpRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    {data.totalModels > 5 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full mt-4"
+                        onClick={() =>
+                          (window.location.href = "/dashboard/models")
+                        }
+                      >
+                        View All Models
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-8">
