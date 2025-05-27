@@ -18,7 +18,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { storage, databases, DATABASE_ID, MODELS_COLLECTION_ID, BUCKET_ID, ID } from "@/lib/appwrite";
 
 export default function ModelUpload() {
   const { isAuthenticated, isSyncing, syncError, user } = useAuth();
@@ -67,7 +66,6 @@ export default function ModelUpload() {
   };
 
   const handleFileSelection = (selectedFile: File) => {
-    // Clear previous errors
     setUploadError(null);
 
     // Validate file type
@@ -76,11 +74,13 @@ export default function ModelUpload() {
       "." + selectedFile.name.split(".").pop()?.toLowerCase();
 
     if (!allowedTypes.some((type) => fileExtension === type)) {
-      setUploadError("Please upload a valid 3D model file (.glb, .usdz, .gltf)");
+      setUploadError(
+        "Please upload a valid 3D model file (.glb, .usdz, .gltf)"
+      );
       return;
     }
 
-    // Validate file size (max 100MB for direct upload)
+    // Validate file size (max 100MB)
     if (selectedFile.size > 100 * 1024 * 1024) {
       setUploadError("File size must be less than 100MB");
       return;
@@ -88,12 +88,10 @@ export default function ModelUpload() {
 
     setFile(selectedFile);
 
-    // Auto-populate name if empty
+    // Auto-populate fields
     if (!name) {
       setName(selectedFile.name.split(".")[0]);
     }
-
-    // Auto-populate description if empty
     if (!description) {
       setDescription(`3D model: ${selectedFile.name}`);
     }
@@ -114,75 +112,118 @@ export default function ModelUpload() {
     setProgress(0);
     setUploadError(null);
 
+    let documentId: string | null = null;
+    let fileId: string | null = null;
+
     try {
-      // Generate unique file ID
-      const fileId = ID.unique();
-      
-      console.log("Starting direct upload to Appwrite...");
-      
-      // Set file permissions based on visibility
-      const filePermissions = isPublic 
-        ? ['read("any")'] // Public files readable by anyone
-        : [`read("user:${user.id}")`, `write("user:${user.id}")`]; // Private files only for user
+      console.log("Getting upload URL from API...");
+      setProgress(10);
 
-      // Upload file directly to Appwrite Storage
-      const uploadedFile = await storage.createFile(
-        BUCKET_ID,
-        fileId,
-        file,
-        filePermissions,
-        (progress) => {
-          // Real-time progress from Appwrite
-          const percentage = Math.round((progress.progress / progress.sizeUploaded) * 100);
-          setProgress(Math.min(percentage, 90)); // Keep at 90% until database save
-          console.log(`Upload progress: ${percentage}%`);
-        }
-      );
+      // Step 1: Get signed upload URL from your API
+      const urlResponse = await fetch("/api/models/upload-url", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          name: name.trim(),
+          description: description.trim(),
+          isPublic,
+        }),
+      });
 
-      console.log("File uploaded successfully:", uploadedFile);
+      if (!urlResponse.ok) {
+        const errorData = await urlResponse.json();
+        throw new Error(errorData.error || `HTTP ${urlResponse.status}`);
+      }
 
-      // Update progress to show we're saving metadata
-      setProgress(95);
+      const uploadData = await urlResponse.json();
+      documentId = uploadData.documentId;
+      fileId = uploadData.fileId;
 
-      // Get the file URL for preview/download
-      const fileUrl = storage.getFileView(BUCKET_ID, uploadedFile.$id);
+      console.log("Got upload data:", uploadData);
+      setProgress(20);
 
-      // Save model metadata to database
-      const modelData = {
-        name: name.trim(),
-        description: description.trim(),
-        fileId: uploadedFile.$id,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        fileUrl: fileUrl.toString(),
-        isPublic: isPublic,
-        userId: user.id,
-        userEmail: user.email || '',
-        createdAt: new Date().toISOString(),
-      };
+      // Step 2: Upload directly to Appwrite Storage
+      const formData = new FormData();
+      formData.append("fileId", uploadData.fileId);
+      formData.append("file", file);
 
-      console.log("Saving model metadata...", modelData);
+      // Add permissions
+      uploadData.permissions.forEach((permission: string) => {
+        formData.append("permissions[]", permission);
+      });
 
-      // Set document permissions
-      const docPermissions = isPublic
-        ? ['read("any")', `write("user:${user.id}")`] // Public read, user write
-        : [`read("user:${user.id}")`, `write("user:${user.id}")`]; // Private
+      console.log("Uploading file directly to Appwrite...");
 
-      const savedModel = await databases.createDocument(
-        DATABASE_ID,
-        MODELS_COLLECTION_ID,
-        ID.unique(),
-        modelData,
-        docPermissions
-      );
+      // Create XMLHttpRequest for progress tracking
+      const xhr = new XMLHttpRequest();
 
-      console.log("Model saved successfully:", savedModel);
+      const uploadPromise = new Promise<any>((resolve, reject) => {
+        xhr.upload.addEventListener("progress", (event) => {
+          if (event.lengthComputable) {
+            const percentComplete =
+              Math.round((event.loaded / event.total) * 70) + 20; // 20-90%
+            setProgress(percentComplete);
+          }
+        });
 
-      // Complete progress
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              resolve(response);
+            } catch (e) {
+              reject(new Error("Invalid response format"));
+            }
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status}`));
+          }
+        });
+
+        xhr.addEventListener("error", () => {
+          reject(new Error("Network error during upload"));
+        });
+
+        xhr.open(
+          "POST",
+          `${process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT}/v1/storage/buckets/${uploadData.bucketId}/files`
+        );
+        xhr.setRequestHeader(
+          "X-Appwrite-Project",
+          process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!
+        );
+        xhr.send(formData);
+      });
+
+      await uploadPromise;
+      console.log("File uploaded successfully to Appwrite");
+      setProgress(90);
+
+      // Step 3: Mark upload as complete
+      const completeResponse = await fetch("/api/models/upload-complete", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          documentId,
+          fileId,
+          success: true,
+        }),
+      });
+
+      if (!completeResponse.ok) {
+        throw new Error("Failed to complete upload");
+      }
+
+      console.log("Upload completed successfully");
       setProgress(100);
 
-      // Reset form after successful upload
+      // Reset form
       setTimeout(() => {
         setFile(null);
         setName("");
@@ -191,42 +232,55 @@ export default function ModelUpload() {
         setProgress(0);
         setIsUploading(false);
         setUploadError(null);
-
-        // Show success message
         alert("Model uploaded successfully!");
-
-        // You could add navigation here if needed
-        // router.push('/dashboard/models');
       }, 1000);
-
     } catch (error: any) {
       console.error("Error uploading model:", error);
-      setProgress(0);
-      setIsUploading(false);
-      
-      // Handle specific Appwrite errors
-      let errorMessage = "Failed to upload model";
-      if (error.message) {
-        errorMessage = error.message;
-      } else if (error.code) {
-        switch (error.code) {
-          case 413:
-            errorMessage = "File too large. Maximum size is 100MB.";
-            break;
-          case 400:
-            errorMessage = "Invalid file format or corrupt file.";
-            break;
-          case 401:
-            errorMessage = "Authentication required. Please log in again.";
-            break;
-          case 403:
-            errorMessage = "Permission denied. Check your account permissions.";
-            break;
-          default:
-            errorMessage = `Upload failed (Error ${error.code})`;
+
+      // Clean up on error
+      if (documentId) {
+        try {
+          await fetch("/api/models/upload-complete", {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              documentId,
+              fileId,
+              success: false,
+            }),
+          });
+        } catch (cleanupError) {
+          console.warn("Cleanup failed:", cleanupError);
         }
       }
-      
+
+      setProgress(0);
+      setIsUploading(false);
+
+      let errorMessage = "Failed to upload model";
+      if (error.message) {
+        if (
+          error.message.includes("authorized") ||
+          error.message.includes("401")
+        ) {
+          errorMessage =
+            "Authentication error. Please try logging out and back in.";
+        } else if (
+          error.message.includes("413") ||
+          error.message.includes("too large")
+        ) {
+          errorMessage = "File too large. Maximum size is 100MB.";
+        } else if (error.message.includes("400")) {
+          errorMessage = "Invalid file format or corrupt file.";
+        } else if (error.message.includes("403")) {
+          errorMessage = "Permission denied. Check your account permissions.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
       setUploadError(errorMessage);
     }
   };
@@ -311,8 +365,8 @@ export default function ModelUpload() {
                   Upload New Model
                 </CardTitle>
                 <CardDescription>
-                  Upload your 3D model directly to secure storage.
-                  Supported formats: .glb, .usdz, .gltf (max 100MB)
+                  Upload your 3D model files up to 100MB directly to secure
+                  storage. Supported formats: .glb, .usdz, .gltf
                 </CardDescription>
               </>
             )}
@@ -334,12 +388,13 @@ export default function ModelUpload() {
                   </p>
                   <Progress value={progress} className="h-3" />
                   <p className="text-xs text-muted-foreground text-center">
-                    {progress < 95 
-                      ? `${progress}% uploaded` 
-                      : progress < 100 
-                        ? "Saving model..." 
-                        : "Complete!"
-                    }
+                    {progress < 20
+                      ? "Preparing upload..."
+                      : progress < 90
+                      ? `${progress}% uploaded`
+                      : progress < 100
+                      ? "Finalizing..."
+                      : "Complete!"}
                   </p>
                 </div>
               </>
