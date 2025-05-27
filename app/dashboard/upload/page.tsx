@@ -112,15 +112,12 @@ export default function ModelUpload() {
     setProgress(0);
     setUploadError(null);
 
-    let documentId: string | null = null;
-    let fileId: string | null = null;
-
     try {
-      console.log("Getting upload URL from API...");
-      setProgress(10);
+      console.log("Starting upload process...");
 
-      // Step 1: Get signed upload URL from your API
-      const urlResponse = await fetch("/api/models/upload-url", {
+      // Step 1: Get upload details from your API
+      setProgress(10);
+      const uploadDetailsResponse = await fetch("/api/models/upload-chunked", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -131,38 +128,31 @@ export default function ModelUpload() {
           fileType: file.type,
           name: name.trim(),
           description: description.trim(),
-          isPublic,
+          isPublic: isPublic,
         }),
       });
 
-      if (!urlResponse.ok) {
-        const errorData = await urlResponse.json();
-        throw new Error(errorData.error || `HTTP ${urlResponse.status}`);
+      if (!uploadDetailsResponse.ok) {
+        const errorData = await uploadDetailsResponse.json();
+        throw new Error(errorData.error || "Failed to get upload details");
       }
 
-      const uploadData = await urlResponse.json();
-      documentId = uploadData.documentId;
-      fileId = uploadData.fileId;
-
-      console.log("Got upload data:", uploadData);
+      const uploadDetails = await uploadDetailsResponse.json();
       setProgress(20);
 
-      // Step 2: Upload directly to Appwrite Storage
+      // Step 2: Upload file directly to Appwrite
       const formData = new FormData();
-      formData.append("fileId", uploadData.fileId);
+      formData.append("fileId", uploadDetails.fileId);
       formData.append("file", file);
 
-      // Add permissions
-      uploadData.permissions.forEach((permission: string) => {
-        formData.append("permissions[]", permission);
+      // Add permissions if your Appwrite setup requires them
+      uploadDetails.permissions.forEach((permission: string, index: number) => {
+        formData.append(`permissions[${index}]`, permission);
       });
 
-      console.log("Uploading file directly to Appwrite...");
-
-      // Create XMLHttpRequest for progress tracking
-      const xhr = new XMLHttpRequest();
-
       const uploadPromise = new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
         xhr.upload.addEventListener("progress", (event) => {
           if (event.lengthComputable) {
             const percentComplete =
@@ -180,7 +170,12 @@ export default function ModelUpload() {
               reject(new Error("Invalid response format"));
             }
           } else {
-            reject(new Error(`Upload failed: ${xhr.status}`));
+            try {
+              const errorResponse = JSON.parse(xhr.responseText);
+              reject(new Error(errorResponse.message || `HTTP ${xhr.status}`));
+            } catch (e) {
+              reject(new Error(`Upload failed: ${xhr.status}`));
+            }
           }
         });
 
@@ -188,42 +183,26 @@ export default function ModelUpload() {
           reject(new Error("Network error during upload"));
         });
 
-        xhr.open(
-          "POST",
-          `${process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT}/v1/storage/buckets/${uploadData.bucketId}/files`
-        );
-        xhr.setRequestHeader(
-          "X-Appwrite-Project",
-          process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!
-        );
+        xhr.open("POST", uploadDetails.uploadUrl);
         xhr.send(formData);
       });
 
-      await uploadPromise;
-      console.log("File uploaded successfully to Appwrite");
-      setProgress(90);
+      const uploadResult = await uploadPromise;
+      console.log("Upload to Appwrite successful:", uploadResult);
 
-      // Step 3: Mark upload as complete
-      const completeResponse = await fetch("/api/models/upload-complete", {
-        method: "PUT",
+      setProgress(95);
+
+      // Step 3: Update document status to "completed"
+      await fetch(`/api/models/${uploadDetails.documentId}/complete`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          documentId,
-          fileId,
-          success: true,
-        }),
       });
 
-      if (!completeResponse.ok) {
-        throw new Error("Failed to complete upload");
-      }
-
-      console.log("Upload completed successfully");
       setProgress(100);
 
-      // Reset form
+      // Reset form after successful upload
       setTimeout(() => {
         setFile(null);
         setName("");
@@ -236,26 +215,6 @@ export default function ModelUpload() {
       }, 1000);
     } catch (error: any) {
       console.error("Error uploading model:", error);
-
-      // Clean up on error
-      if (documentId) {
-        try {
-          await fetch("/api/models/upload-complete", {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              documentId,
-              fileId,
-              success: false,
-            }),
-          });
-        } catch (cleanupError) {
-          console.warn("Cleanup failed:", cleanupError);
-        }
-      }
-
       setProgress(0);
       setIsUploading(false);
 

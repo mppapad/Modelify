@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverComponentsExternalPackages: ["node-appwrite"],
+  },
+  // Increase API route body size limit
+  api: {
+    bodyParser: {
+      sizeLimit: "100mb",
+    },
+  },
 };
 module.exports = {
   images: {

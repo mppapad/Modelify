@@ -23,23 +23,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
-    const name = formData.get("name") as string;
-    const description = formData.get("description") as string;
-    const isPublic = formData.get("isPublic") === "true"; // Optional: let users choose
+    const { fileName, fileSize, fileType, name, description, isPublic } =
+      await request.json();
 
-    if (!file || !name) {
+    if (!fileName || !fileSize || !name) {
       return NextResponse.json(
-        { error: "Missing required fields: file or name" },
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    // Validate file size (100MB limit)
+    if (fileSize > 100 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: "File size must be less than 100MB" },
         { status: 400 }
       );
     }
 
     const appwriteUserId = createAppwriteUserId(user.id);
     const fileId = ID.unique();
+    const documentId = ID.unique();
 
-    // Create permissions array - user always has full access
+    // Create permissions array
     const permissions = [
       Permission.read(Role.user(appwriteUserId)),
       Permission.write(Role.user(appwriteUserId)),
@@ -47,66 +53,127 @@ export async function POST(request: NextRequest) {
       Permission.delete(Role.user(appwriteUserId)),
     ];
 
-    // Add public read permission if desired (for public components)
+    // Add public permissions if needed
     if (isPublic) {
       permissions.push(Permission.read(Role.guests()));
-      permissions.push(Permission.read(Role.users())); // For logged-in users too
+      permissions.push(Permission.read(Role.users()));
     }
 
-    // Upload file with proper permissions
-    const uploadedFile = await storage.createFile(
-      BUCKET_ID,
-      fileId,
-      file,
-      permissions
-    );
-
-    // Create document in database with matching permissions
+    // Pre-create the database document (we'll update it after upload)
     const document = await databases.createDocument(
       DATABASE_ID,
       MODELS_COLLECTION_ID,
-      ID.unique(),
+      documentId,
       {
         name,
-        description,
-        fileId: uploadedFile.$id,
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type,
+        description: description || "",
+        fileId,
+        fileName,
+        fileSize,
+        mimeType: fileType,
         userId: appwriteUserId,
         kindeUserId: user.id,
         isPublic: isPublic || false,
         createdAt: new Date().toISOString(),
       },
-      // Database document permissions (separate from file permissions)
       [
         Permission.read(Role.user(appwriteUserId)),
         Permission.write(Role.user(appwriteUserId)),
         Permission.update(Role.user(appwriteUserId)),
         Permission.delete(Role.user(appwriteUserId)),
-        // Add public read for document metadata if file is public
         ...(isPublic
           ? [Permission.read(Role.guests()), Permission.read(Role.users())]
           : []),
       ]
     );
 
+    // Return the upload details for client-side upload
     return NextResponse.json({
-      id: document.$id,
-      name: document.name,
-      description: document.description,
-      fileId: document.fileId,
-      fileName: document.fileName,
-      fileSize: document.fileSize,
-      mimeType: document.mimeType,
-      userId: document.userId,
-      isPublic: document.isPublic,
-      createdAt: document.createdAt,
+      fileId,
+      documentId,
+      bucketId: BUCKET_ID,
+      permissions,
+      uploadUrl: `${process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT}/v1/storage/buckets/${BUCKET_ID}/files`,
     });
   } catch (error: any) {
-    console.error("Error uploading model:", error);
+    console.error("Error creating upload URL:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to upload model" },
+      { error: error.message || "Failed to create upload URL" },
+      { status: 500 }
+    );
+  }
+}
+
+// app/api/models/upload-complete/route.ts
+export async function PUT(request: NextRequest) {
+  try {
+    const { getUser } = getKindeServerSession();
+    const user = await getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not authenticated" },
+        { status: 401 }
+      );
+    }
+
+    const { documentId, fileId, success } = await request.json();
+
+    if (!documentId) {
+      return NextResponse.json(
+        { error: "Missing document ID" },
+        { status: 400 }
+      );
+    }
+
+    const appwriteUserId = createAppwriteUserId(user.id);
+
+    if (success) {
+      // Update document with completion timestamp
+      const updatedDocument = await databases.updateDocument(
+        DATABASE_ID,
+        MODELS_COLLECTION_ID,
+        documentId,
+        {
+          updatedAt: new Date().toISOString(),
+        }
+      );
+
+      return NextResponse.json({
+        success: true,
+        document: updatedDocument,
+      });
+    } else {
+      // Upload failed, clean up
+      try {
+        // Delete the incomplete document
+        await databases.deleteDocument(
+          DATABASE_ID,
+          MODELS_COLLECTION_ID,
+          documentId
+        );
+
+        // Try to delete the file if it was created
+        if (fileId) {
+          try {
+            await storage.deleteFile(BUCKET_ID, fileId);
+          } catch (deleteError) {
+            console.warn("Could not delete file:", deleteError);
+          }
+        }
+      } catch (cleanupError) {
+        console.error("Cleanup error:", cleanupError);
+      }
+
+      return NextResponse.json({
+        success: false,
+        message: "Upload failed and resources cleaned up",
+      });
+    }
+  } catch (error: any) {
+    console.error("Error completing upload:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to complete upload" },
       { status: 500 }
     );
   }

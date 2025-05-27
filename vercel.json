@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "app/api/models/upload-chunked/route.ts": {
+      "maxDuration": 300
+    }
+  }
+}
