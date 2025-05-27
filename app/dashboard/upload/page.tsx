@@ -1,3 +1,4 @@
+// components/ModelUpload.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -139,8 +140,8 @@ export default function ModelUpload() {
       // Update progress to show we're saving metadata
       setProgress(95);
 
-      // Get the file URL for preview
-      const fileUrl = storage.getFilePreview(BUCKET_ID, uploadedFile.$id);
+      // Get the file URL for preview/download
+      const fileUrl = storage.getFileView(BUCKET_ID, uploadedFile.$id);
 
       // Save model metadata to database
       const modelData = {
@@ -150,7 +151,7 @@ export default function ModelUpload() {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,
-        fileUrl: fileUrl.href,
+        fileUrl: fileUrl.toString(),
         isPublic: isPublic,
         userId: user.id,
         userEmail: user.email || '',
