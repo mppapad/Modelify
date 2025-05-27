@@ -42,6 +42,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate file type
+    const allowedTypes = [".glb", ".usdz", ".gltf"];
+    const fileExtension = "." + file.name.split(".").pop()?.toLowerCase();
+
+    if (!allowedTypes.some((type) => fileExtension === type)) {
+      return NextResponse.json(
+        {
+          error:
+            "Invalid file type. Please upload .glb, .usdz, or .gltf files only.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate file size (100MB limit)
+    if (file.size > 100 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: "File size exceeds 100MB limit" },
+        { status: 413 }
+      );
+    }
+
     const appwriteUserId = createAppwriteUserId(user.id);
 
     // For single chunk (small files) or final chunk
@@ -62,12 +84,7 @@ export async function POST(request: NextRequest) {
         permissions.push(Permission.read(Role.users()));
       }
 
-      // Convert File to Buffer for Appwrite
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
       // Upload file to Appwrite Storage
-      // In newer versions, you can pass the buffer directly or use Blob
       const uploadedFile = await storage.createFile(
         BUCKET_ID,
         fileId,
@@ -105,6 +122,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
+        message: "Model uploaded successfully",
         document: {
           id: document.$id,
           name: document.name,
@@ -122,6 +140,7 @@ export async function POST(request: NextRequest) {
       // For chunked upload (if you want to implement it later)
       return NextResponse.json({
         success: true,
+        message: "Chunk uploaded successfully",
         chunkUploaded: chunkIndex + 1,
         totalChunks,
         uploadId: uploadId || ID.unique(),
@@ -152,13 +171,34 @@ export async function POST(request: NextRequest) {
           statusCode = 413;
           errorMessage = "File too large";
           break;
+        case 429:
+          statusCode = 429;
+          errorMessage = "Too many requests. Please try again later.";
+          break;
       }
+    }
+
+    // Handle specific Appwrite errors
+    if (error.message?.includes("Invalid file type")) {
+      statusCode = 400;
+      errorMessage =
+        "Invalid file type. Please upload .glb, .usdz, or .gltf files only.";
+    } else if (error.message?.includes("file size")) {
+      statusCode = 413;
+      errorMessage = "File size exceeds the maximum limit of 100MB.";
+    } else if (error.message?.includes("storage")) {
+      statusCode = 500;
+      errorMessage = "Storage service error. Please try again later.";
+    } else if (error.message?.includes("database")) {
+      statusCode = 500;
+      errorMessage = "Database error. Please try again later.";
     }
 
     return NextResponse.json({ error: errorMessage }, { status: statusCode });
   }
 }
 
+// Configuration for handling large files
 export const config = {
   api: {
     bodyParser: {

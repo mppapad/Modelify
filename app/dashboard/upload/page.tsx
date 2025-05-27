@@ -115,48 +115,25 @@ export default function ModelUpload() {
     try {
       console.log("Starting upload process...");
 
-      // Step 1: Get upload details from your API
-      setProgress(10);
-      const uploadDetailsResponse = await fetch("/api/models/upload-chunked", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-          name: name.trim(),
-          description: description.trim(),
-          isPublic: isPublic,
-        }),
-      });
-
-      if (!uploadDetailsResponse.ok) {
-        const errorData = await uploadDetailsResponse.json();
-        throw new Error(errorData.error || "Failed to get upload details");
-      }
-
-      const uploadDetails = await uploadDetailsResponse.json();
-      setProgress(20);
-
-      // Step 2: Upload file directly to Appwrite
+      // Create FormData for direct upload to your existing API
       const formData = new FormData();
-      formData.append("fileId", uploadDetails.fileId);
       formData.append("file", file);
+      formData.append("name", name.trim());
+      formData.append("description", description.trim());
+      formData.append("isPublic", isPublic.toString());
 
-      // Add permissions if your Appwrite setup requires them
-      uploadDetails.permissions.forEach((permission: string, index: number) => {
-        formData.append(`permissions[${index}]`, permission);
-      });
+      // For chunked upload support (optional)
+      formData.append("chunkIndex", "0");
+      formData.append("totalChunks", "1");
 
       const uploadPromise = new Promise<any>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
 
         xhr.upload.addEventListener("progress", (event) => {
           if (event.lengthComputable) {
-            const percentComplete =
-              Math.round((event.loaded / event.total) * 70) + 20; // 20-90%
+            const percentComplete = Math.round(
+              (event.loaded / event.total) * 100
+            );
             setProgress(percentComplete);
           }
         });
@@ -172,7 +149,7 @@ export default function ModelUpload() {
           } else {
             try {
               const errorResponse = JSON.parse(xhr.responseText);
-              reject(new Error(errorResponse.message || `HTTP ${xhr.status}`));
+              reject(new Error(errorResponse.error || `HTTP ${xhr.status}`));
             } catch (e) {
               reject(new Error(`Upload failed: ${xhr.status}`));
             }
@@ -183,22 +160,13 @@ export default function ModelUpload() {
           reject(new Error("Network error during upload"));
         });
 
-        xhr.open("POST", uploadDetails.uploadUrl);
+        // Use your existing API endpoint that expects multipart/form-data
+        xhr.open("POST", "/api/models/upload");
         xhr.send(formData);
       });
 
       const uploadResult = await uploadPromise;
-      console.log("Upload to Appwrite successful:", uploadResult);
-
-      setProgress(95);
-
-      // Step 3: Update document status to "completed"
-      await fetch(`/api/models/${uploadDetails.documentId}/complete`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      console.log("Upload successful:", uploadResult);
 
       setProgress(100);
 
@@ -347,13 +315,7 @@ export default function ModelUpload() {
                   </p>
                   <Progress value={progress} className="h-3" />
                   <p className="text-xs text-muted-foreground text-center">
-                    {progress < 20
-                      ? "Preparing upload..."
-                      : progress < 90
-                      ? `${progress}% uploaded`
-                      : progress < 100
-                      ? "Finalizing..."
-                      : "Complete!"}
+                    {progress < 100 ? `${progress}% uploaded` : "Complete!"}
                   </p>
                 </div>
               </>
