@@ -1,4 +1,3 @@
-// components/ModelUpload.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -121,12 +120,17 @@ export default function ModelUpload() {
       
       console.log("Starting direct upload to Appwrite...");
       
+      // Set file permissions based on visibility
+      const filePermissions = isPublic 
+        ? ['read("any")'] // Public files readable by anyone
+        : [`read("user:${user.id}")`, `write("user:${user.id}")`]; // Private files only for user
+
       // Upload file directly to Appwrite Storage
       const uploadedFile = await storage.createFile(
         BUCKET_ID,
         fileId,
         file,
-        undefined, // permissions - will use bucket default
+        filePermissions,
         (progress) => {
           // Real-time progress from Appwrite
           const percentage = Math.round((progress.progress / progress.sizeUploaded) * 100);
@@ -160,11 +164,17 @@ export default function ModelUpload() {
 
       console.log("Saving model metadata...", modelData);
 
+      // Set document permissions
+      const docPermissions = isPublic
+        ? ['read("any")', `write("user:${user.id}")`] // Public read, user write
+        : [`read("user:${user.id}")`, `write("user:${user.id}")`]; // Private
+
       const savedModel = await databases.createDocument(
         DATABASE_ID,
         MODELS_COLLECTION_ID,
         ID.unique(),
-        modelData
+        modelData,
+        docPermissions
       );
 
       console.log("Model saved successfully:", savedModel);
