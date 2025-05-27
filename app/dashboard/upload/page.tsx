@@ -1,4 +1,3 @@
-// components/ModelUpload.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -19,9 +18,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { storage, databases, DATABASE_ID, MODELS_COLLECTION_ID, BUCKET_ID, ID } from "@/lib/appwrite";
 
 export default function ModelUpload() {
-  const { isAuthenticated, isSyncing, syncError } = useAuth();
+  const { isAuthenticated, isSyncing, syncError, user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -30,6 +30,7 @@ export default function ModelUpload() {
   const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(true);
   const [dragActive, setDragActive] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Simulate initial loading
   useEffect(() => {
@@ -66,19 +67,22 @@ export default function ModelUpload() {
   };
 
   const handleFileSelection = (selectedFile: File) => {
+    // Clear previous errors
+    setUploadError(null);
+
     // Validate file type
     const allowedTypes = [".glb", ".usdz", ".gltf"];
     const fileExtension =
       "." + selectedFile.name.split(".").pop()?.toLowerCase();
 
     if (!allowedTypes.some((type) => fileExtension === type)) {
-      alert("Please upload a valid 3D model file (.glb, .usdz, .gltf)");
+      setUploadError("Please upload a valid 3D model file (.glb, .usdz, .gltf)");
       return;
     }
 
-    // Validate file size (max 50MB)
-    if (selectedFile.size > 50 * 1024 * 1024) {
-      alert("File size must be less than 50MB");
+    // Validate file size (max 100MB for direct upload)
+    if (selectedFile.size > 100 * 1024 * 1024) {
+      setUploadError("File size must be less than 100MB");
       return;
     }
 
@@ -97,46 +101,74 @@ export default function ModelUpload() {
 
   const handleUpload = async () => {
     if (!file || !name.trim()) {
-      alert("Please select a file and provide a name");
+      setUploadError("Please select a file and provide a name");
+      return;
+    }
+
+    if (!user) {
+      setUploadError("User not authenticated");
       return;
     }
 
     setIsUploading(true);
     setProgress(0);
-
-    // Simulate progress for better UX
-    const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(progressInterval);
-          return 90;
-        }
-        return prev + 10;
-      });
-    }, 200);
+    setUploadError(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("name", name.trim());
-      formData.append("description", description.trim());
-      formData.append("isPublic", isPublic.toString());
+      // Generate unique file ID
+      const fileId = ID.unique();
+      
+      console.log("Starting direct upload to Appwrite...");
+      
+      // Upload file directly to Appwrite Storage
+      const uploadedFile = await storage.createFile(
+        BUCKET_ID,
+        fileId,
+        file,
+        undefined, // permissions - will use bucket default
+        (progress) => {
+          // Real-time progress from Appwrite
+          const percentage = Math.round((progress.progress / progress.sizeUploaded) * 100);
+          setProgress(Math.min(percentage, 90)); // Keep at 90% until database save
+          console.log(`Upload progress: ${percentage}%`);
+        }
+      );
 
-      const response = await fetch("/api/models", {
-        method: "POST",
-        body: formData,
-      });
+      console.log("File uploaded successfully:", uploadedFile);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Upload failed");
-      }
+      // Update progress to show we're saving metadata
+      setProgress(95);
 
-      const model = await response.json();
-      console.log("Model uploaded successfully:", model);
+      // Get the file URL for preview
+      const fileUrl = storage.getFilePreview(BUCKET_ID, uploadedFile.$id);
+
+      // Save model metadata to database
+      const modelData = {
+        name: name.trim(),
+        description: description.trim(),
+        fileId: uploadedFile.$id,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        fileUrl: fileUrl.href,
+        isPublic: isPublic,
+        userId: user.id,
+        userEmail: user.email || '',
+        createdAt: new Date().toISOString(),
+      };
+
+      console.log("Saving model metadata...", modelData);
+
+      const savedModel = await databases.createDocument(
+        DATABASE_ID,
+        MODELS_COLLECTION_ID,
+        ID.unique(),
+        modelData
+      );
+
+      console.log("Model saved successfully:", savedModel);
 
       // Complete progress
-      clearInterval(progressInterval);
       setProgress(100);
 
       // Reset form after successful upload
@@ -147,16 +179,44 @@ export default function ModelUpload() {
         setIsPublic(false);
         setProgress(0);
         setIsUploading(false);
+        setUploadError(null);
+
+        // Show success message
+        alert("Model uploaded successfully!");
 
         // You could add navigation here if needed
         // router.push('/dashboard/models');
       }, 1000);
+
     } catch (error: any) {
       console.error("Error uploading model:", error);
-      clearInterval(progressInterval);
       setProgress(0);
       setIsUploading(false);
-      alert(`Failed to upload model: ${error.message}`);
+      
+      // Handle specific Appwrite errors
+      let errorMessage = "Failed to upload model";
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.code) {
+        switch (error.code) {
+          case 413:
+            errorMessage = "File too large. Maximum size is 100MB.";
+            break;
+          case 400:
+            errorMessage = "Invalid file format or corrupt file.";
+            break;
+          case 401:
+            errorMessage = "Authentication required. Please log in again.";
+            break;
+          case 403:
+            errorMessage = "Permission denied. Check your account permissions.";
+            break;
+          default:
+            errorMessage = `Upload failed (Error ${error.code})`;
+        }
+      }
+      
+      setUploadError(errorMessage);
     }
   };
 
@@ -240,8 +300,8 @@ export default function ModelUpload() {
                   Upload New Model
                 </CardTitle>
                 <CardDescription>
-                  Upload your 3D model and configure its visibility settings.
-                  Supported formats: .glb, .usdz, .gltf (max 50MB)
+                  Upload your 3D model directly to secure storage.
+                  Supported formats: .glb, .usdz, .gltf (max 100MB)
                 </CardDescription>
               </>
             )}
@@ -263,7 +323,12 @@ export default function ModelUpload() {
                   </p>
                   <Progress value={progress} className="h-3" />
                   <p className="text-xs text-muted-foreground text-center">
-                    {progress}% complete
+                    {progress < 95 
+                      ? `${progress}% uploaded` 
+                      : progress < 100 
+                        ? "Saving model..." 
+                        : "Complete!"
+                    }
                   </p>
                 </div>
               </>
@@ -299,7 +364,7 @@ export default function ModelUpload() {
                           : "Drop your model here, or click to browse"}
                       </p>
                       <p className="text-xs text-gray-500">
-                        GLB, USDZ, GLTF files up to 50MB
+                        GLB, USDZ, GLTF files up to 100MB
                       </p>
                     </div>
                   </div>
@@ -359,6 +424,16 @@ export default function ModelUpload() {
                     </p>
                   </div>
                 </div>
+
+                {/* Error Display */}
+                {uploadError && (
+                  <div className="p-3 text-red-700 bg-red-100 border border-red-300 rounded-lg">
+                    <div className="flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-2" />
+                      {uploadError}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </CardContent>
