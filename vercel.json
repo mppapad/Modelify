@@ -1,7 +1,13 @@
 {
   "functions": {
-    "app/api/models/upload-chunked/route.ts": {
-      "maxDuration": 59
+    "app/api/models/upload/route.ts": {
+      "maxDuration": 60
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ]
 }

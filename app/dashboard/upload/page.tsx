@@ -39,6 +39,14 @@ export default function ModelUpload() {
     return () => clearTimeout(timer);
   }, []);
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -68,6 +76,16 @@ export default function ModelUpload() {
   const handleFileSelection = (selectedFile: File) => {
     setUploadError(null);
 
+    console.log("File selected:", {
+      name: selectedFile.name,
+      size: selectedFile.size,
+      sizeFormatted: formatFileSize(selectedFile.size),
+      type: selectedFile.type,
+      sizeLimitMB: 100,
+      sizeLimitBytes: 100 * 1024 * 1024,
+      isOverLimit: selectedFile.size > 100 * 1024 * 1024,
+    });
+
     // Validate file type
     const allowedTypes = [".glb", ".usdz", ".gltf"];
     const fileExtension =
@@ -81,8 +99,13 @@ export default function ModelUpload() {
     }
 
     // Validate file size (max 100MB)
-    if (selectedFile.size > 100 * 1024 * 1024) {
-      setUploadError("File size must be less than 100MB");
+    const maxSizeBytes = 100 * 1024 * 1024; // 100MB in bytes
+    if (selectedFile.size > maxSizeBytes) {
+      setUploadError(
+        `File size (${formatFileSize(
+          selectedFile.size
+        )}) exceeds the 100MB limit. Please compress your model or use a smaller file.`
+      );
       return;
     }
 
@@ -108,12 +131,28 @@ export default function ModelUpload() {
       return;
     }
 
+    // Double-check file size before upload
+    const maxSizeBytes = 100 * 1024 * 1024; // 100MB
+    if (file.size > maxSizeBytes) {
+      setUploadError(
+        `File size (${formatFileSize(
+          file.size
+        )}) exceeds the 100MB limit. Please use a smaller file.`
+      );
+      return;
+    }
+
     setIsUploading(true);
     setProgress(0);
     setUploadError(null);
 
     try {
-      console.log("Starting upload process...");
+      console.log("Starting upload process with file:", {
+        name: file.name,
+        size: file.size,
+        sizeFormatted: formatFileSize(file.size),
+        type: file.type,
+      });
 
       // Create FormData for direct upload to your existing API
       const formData = new FormData();
@@ -135,30 +174,51 @@ export default function ModelUpload() {
               (event.loaded / event.total) * 100
             );
             setProgress(percentComplete);
+            console.log(`Upload progress: ${percentComplete}%`);
           }
         });
 
         xhr.addEventListener("load", () => {
+          console.log("XHR Response:", {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            responseText: xhr.responseText,
+          });
+
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const response = JSON.parse(xhr.responseText);
               resolve(response);
             } catch (e) {
+              console.error("Failed to parse response:", e);
               reject(new Error("Invalid response format"));
             }
           } else {
             try {
               const errorResponse = JSON.parse(xhr.responseText);
+              console.error("Upload error response:", errorResponse);
               reject(new Error(errorResponse.error || `HTTP ${xhr.status}`));
             } catch (e) {
-              reject(new Error(`Upload failed: ${xhr.status}`));
+              console.error("Failed to parse error response:", e);
+              reject(
+                new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`)
+              );
             }
           }
         });
 
-        xhr.addEventListener("error", () => {
+        xhr.addEventListener("error", (event) => {
+          console.error("XHR Network error:", event);
           reject(new Error("Network error during upload"));
         });
+
+        xhr.addEventListener("timeout", () => {
+          console.error("XHR Timeout");
+          reject(new Error("Upload timeout. Please try again."));
+        });
+
+        // Set timeout to 10 minutes for large files
+        xhr.timeout = 10 * 60 * 1000;
 
         // Use your existing API endpoint that expects multipart/form-data
         xhr.open("POST", "/api/models/upload");
@@ -196,13 +256,19 @@ export default function ModelUpload() {
             "Authentication error. Please try logging out and back in.";
         } else if (
           error.message.includes("413") ||
-          error.message.includes("too large")
+          error.message.includes("too large") ||
+          error.message.includes("size")
         ) {
-          errorMessage = "File too large. Maximum size is 100MB.";
+          errorMessage = `File too large (${formatFileSize(
+            file.size
+          )}). Maximum size is 100MB. Please compress your model file.`;
         } else if (error.message.includes("400")) {
           errorMessage = "Invalid file format or corrupt file.";
         } else if (error.message.includes("403")) {
           errorMessage = "Permission denied. Check your account permissions.";
+        } else if (error.message.includes("timeout")) {
+          errorMessage =
+            "Upload timeout. Please check your connection and try again.";
         } else {
           errorMessage = error.message;
         }
@@ -311,7 +377,8 @@ export default function ModelUpload() {
               <>
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Uploading: <strong>{file?.name}</strong>
+                    Uploading: <strong>{file?.name}</strong> (
+                    {formatFileSize(file?.size || 0)})
                   </p>
                   <Progress value={progress} className="h-3" />
                   <p className="text-xs text-muted-foreground text-center">
@@ -347,7 +414,7 @@ export default function ModelUpload() {
                       <UploadCloud className="w-10 h-10 text-gray-400 mb-3" />
                       <p className="text-sm font-medium text-gray-700 mb-1">
                         {file
-                          ? file.name
+                          ? `${file.name} (${formatFileSize(file.size)})`
                           : "Drop your model here, or click to browse"}
                       </p>
                       <p className="text-xs text-gray-500">
@@ -356,6 +423,24 @@ export default function ModelUpload() {
                     </div>
                   </div>
                 </div>
+
+                {/* File Info Debug */}
+                {file && (
+                  <div className="p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
+                    <strong>File Details:</strong>
+                    <br />
+                    Name: {file.name}
+                    <br />
+                    Size: {formatFileSize(file.size)}
+                    <br />
+                    Type: {file.type}
+                    <br />
+                    Size Check:{" "}
+                    {file.size > 100 * 1024 * 1024
+                      ? "❌ Too Large"
+                      : "✅ Size OK"}
+                  </div>
+                )}
 
                 {/* Model Details */}
                 <div className="space-y-4">
