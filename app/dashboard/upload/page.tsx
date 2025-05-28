@@ -107,7 +107,7 @@ export default function ModelUpload() {
         throw new Error(errorData.error || "Failed to initialize upload");
       }
 
-      const { fileId, bucketId, uploadUrl, documentId } =
+      const { fileId, bucketId, uploadUrl, documentId, projectId } =
         await initResponse.json();
       console.log("Upload initialized:", { fileId, bucketId, documentId });
 
@@ -124,7 +124,7 @@ export default function ModelUpload() {
         method: "POST",
         body: formData,
         headers: {
-          "X-Appwrite-Project": process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!,
+          "X-Appwrite-Project": projectId,
         },
       });
 

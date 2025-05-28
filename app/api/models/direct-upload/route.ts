@@ -41,6 +41,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate file type
+    const allowedTypes = [".glb", ".usdz", ".gltf"];
+    const fileExtension = "." + fileName.split(".").pop()?.toLowerCase();
+
+    if (!allowedTypes.some((type) => fileExtension === type)) {
+      return NextResponse.json(
+        {
+          error:
+            "Invalid file type. Please upload .glb, .usdz, or .gltf files only.",
+        },
+        { status: 400 }
+      );
+    }
+
     const appwriteUserId = createAppwriteUserId(user.id);
     const fileId = ID.unique();
     const documentId = ID.unique();
@@ -95,6 +109,7 @@ export async function POST(request: NextRequest) {
       bucketId: BUCKET_ID,
       permissions,
       uploadUrl: `${process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT}/v1/storage/buckets/${BUCKET_ID}/files`,
+      projectId: process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
     });
   } catch (error: any) {
     console.error("Error creating upload URL:", error);
@@ -103,4 +118,15 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
 }
