@@ -1,126 +1,71 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { UploadCloud, Loader2, AlertCircle, Globe, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useRouter } from "next/navigation";
 
 export default function ModelUpload() {
-  const { isAuthenticated, isSyncing, syncError, user } = useAuth();
+  const { user } = useAuth();
+  const router = useRouter();
+
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [dragActive, setDragActive] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  // Simulate initial loading
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelection(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFileSelection(e.target.files[0]);
-    }
-  };
-
-  const handleFileSelection = (selectedFile: File) => {
-    setUploadError(null);
-
-    console.log("File selected:", {
-      name: selectedFile.name,
-      size: selectedFile.size,
-      sizeFormatted: formatFileSize(selectedFile.size),
-      type: selectedFile.type,
-      sizeLimitMB: 100,
-      sizeLimitBytes: 100 * 1024 * 1024,
-      isOverLimit: selectedFile.size > 100 * 1024 * 1024,
-    });
-
-    // Validate file type
+  // File validation
+  const validateFile = (selectedFile: File): string | null => {
     const allowedTypes = [".glb", ".usdz", ".gltf"];
     const fileExtension =
       "." + selectedFile.name.split(".").pop()?.toLowerCase();
 
     if (!allowedTypes.some((type) => fileExtension === type)) {
-      setUploadError(
-        "Please upload a valid 3D model file (.glb, .usdz, .gltf)"
-      );
-      return;
+      return "Invalid file type. Please upload .glb, .usdz, or .gltf files only.";
     }
 
-    // Validate file size (max 100MB)
-    const maxSizeBytes = 100 * 1024 * 1024; // 100MB in bytes
-    if (selectedFile.size > maxSizeBytes) {
-      setUploadError(
-        `File size (${formatFileSize(
-          selectedFile.size
-        )}) exceeds the 100MB limit. Please compress your model or use a smaller file.`
-      );
-      return;
+    // Check file size (100MB limit)
+    if (selectedFile.size > 100 * 1024 * 1024) {
+      return "File size exceeds 100MB limit.";
     }
 
-    setFile(selectedFile);
+    return null;
+  };
 
-    // Auto-populate fields
-    if (!name) {
-      setName(selectedFile.name.split(".")[0]);
-    }
-    if (!description) {
-      setDescription(`3D model: ${selectedFile.name}`);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      const error = validateFile(selectedFile);
+      if (error) {
+        setUploadError(error);
+        setFile(null);
+        return;
+      }
+
+      setFile(selectedFile);
+      setUploadError("");
+
+      // Auto-generate name from filename if empty
+      if (!name.trim()) {
+        const baseName = selectedFile.name.replace(/\.[^/.]+$/, "");
+        setName(baseName);
+      }
     }
   };
 
-  const handleUpload = async () => {
+  // Server-side upload with progress simulation
+  const handleServerUpload = async () => {
     if (!file || !name.trim()) {
       setUploadError("Please select a file and provide a name");
       return;
@@ -131,407 +76,250 @@ export default function ModelUpload() {
       return;
     }
 
-    // Double-check file size before upload
-    const maxSizeBytes = 100 * 1024 * 1024; // 100MB
-    if (file.size > maxSizeBytes) {
-      setUploadError(
-        `File size (${formatFileSize(
-          file.size
-        )}) exceeds the 100MB limit. Please use a smaller file.`
-      );
-      return;
-    }
-
     setIsUploading(true);
-    setProgress(0);
-    setUploadError(null);
+    setUploadError("");
+    setUploadProgress(0);
 
     try {
-      console.log("Starting upload process with file:", {
-        name: file.name,
-        size: file.size,
-        sizeFormatted: formatFileSize(file.size),
-        type: file.type,
-      });
-
-      // Create FormData for direct upload to your existing API
+      // Create form data
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("name", name.trim());
-      formData.append("description", description.trim());
+      formData.append("name", name);
+      formData.append("description", description);
       formData.append("isPublic", isPublic.toString());
 
-      // For chunked upload support (optional)
-      formData.append("chunkIndex", "0");
-      formData.append("totalChunks", "1");
-
-      const uploadPromise = new Promise<any>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-
-        xhr.upload.addEventListener("progress", (event) => {
-          if (event.lengthComputable) {
-            const percentComplete = Math.round(
-              (event.loaded / event.total) * 100
-            );
-            setProgress(percentComplete);
-            console.log(`Upload progress: ${percentComplete}%`);
-          }
+      // Simulate progress for user feedback
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev < 90) return prev + 10;
+          return prev;
         });
+      }, 500);
 
-        xhr.addEventListener("load", () => {
-          console.log("XHR Response:", {
-            status: xhr.status,
-            statusText: xhr.statusText,
-            responseText: xhr.responseText,
-          });
+      console.log("Starting server-side upload...");
 
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const response = JSON.parse(xhr.responseText);
-              resolve(response);
-            } catch (e) {
-              console.error("Failed to parse response:", e);
-              reject(new Error("Invalid response format"));
-            }
-          } else {
-            try {
-              const errorResponse = JSON.parse(xhr.responseText);
-              console.error("Upload error response:", errorResponse);
-              reject(new Error(errorResponse.error || `HTTP ${xhr.status}`));
-            } catch (e) {
-              console.error("Failed to parse error response:", e);
-              reject(
-                new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`)
-              );
-            }
-          }
-        });
-
-        xhr.addEventListener("error", (event) => {
-          console.error("XHR Network error:", event);
-          reject(new Error("Network error during upload"));
-        });
-
-        xhr.addEventListener("timeout", () => {
-          console.error("XHR Timeout");
-          reject(new Error("Upload timeout. Please try again."));
-        });
-
-        // Set timeout to 10 minutes for large files
-        xhr.timeout = 10 * 60 * 1000;
-
-        // Use your existing API endpoint that expects multipart/form-data
-        xhr.open("POST", "/api/models/upload");
-        xhr.send(formData);
+      // Upload to server (which handles Appwrite upload)
+      const response = await fetch("/api/models/upload-large", {
+        method: "POST",
+        body: formData,
       });
 
-      const uploadResult = await uploadPromise;
-      console.log("Upload successful:", uploadResult);
+      clearInterval(progressInterval);
+      setUploadProgress(100);
 
-      setProgress(100);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || `HTTP error! status: ${response.status}`
+        );
+      }
 
-      // Reset form after successful upload
+      const result = await response.json();
+      console.log("Upload successful:", result);
+
+      setUploadSuccess(true);
+
+      // Reset form after success
       setTimeout(() => {
         setFile(null);
         setName("");
         setDescription("");
         setIsPublic(false);
-        setProgress(0);
-        setIsUploading(false);
-        setUploadError(null);
-        alert("Model uploaded successfully!");
-      }, 1000);
-    } catch (error: any) {
-      console.error("Error uploading model:", error);
-      setProgress(0);
-      setIsUploading(false);
+        setUploadSuccess(false);
+        setUploadProgress(0);
 
-      let errorMessage = "Failed to upload model";
-      if (error.message) {
+        // Redirect to models page
+        router.push("/dashboard/models");
+      }, 2000);
+    } catch (error) {
+      console.error("Upload error:", error);
+
+      if (error instanceof Error) {
         if (
-          error.message.includes("authorized") ||
-          error.message.includes("401")
-        ) {
-          errorMessage =
-            "Authentication error. Please try logging out and back in.";
-        } else if (
           error.message.includes("413") ||
-          error.message.includes("too large") ||
-          error.message.includes("size")
+          error.message.includes("file_size_exceeded")
         ) {
-          errorMessage = `File too large (${formatFileSize(
-            file.size
-          )}). Maximum size is 100MB. Please compress your model file.`;
-        } else if (error.message.includes("400")) {
-          errorMessage = "Invalid file format or corrupt file.";
-        } else if (error.message.includes("403")) {
-          errorMessage = "Permission denied. Check your account permissions.";
-        } else if (error.message.includes("timeout")) {
-          errorMessage =
-            "Upload timeout. Please check your connection and try again.";
+          setUploadError("File size exceeds the maximum allowed limit.");
+        } else if (error.message.includes("storage_file_type_unsupported")) {
+          setUploadError(
+            "File type not supported. Please upload .glb, .usdz, or .gltf files only."
+          );
+        } else if (
+          error.message.includes("NetworkError") ||
+          error.message.includes("fetch")
+        ) {
+          setUploadError(
+            "Network error. Please check your connection and try again."
+          );
         } else {
-          errorMessage = error.message;
+          setUploadError(`Upload failed: ${error.message}`);
         }
+      } else {
+        setUploadError("An unexpected error occurred during upload.");
       }
-
-      setUploadError(errorMessage);
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  // Show sync error if there's one
-  if (syncError) {
-    return (
-      <div className="min-h-screen bg-white py-10 px-4 md:px-8">
-        <div className="max-w-2xl mx-auto">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                <p className="text-red-700 font-medium">
-                  Authentication Sync Error
-                </p>
-                <p className="text-red-600 text-sm mt-2">{syncError}</p>
-                <Button
-                  onClick={() => window.location.reload()}
-                  className="mt-4 bg-red-600 hover:bg-red-700 text-white"
-                >
-                  Retry
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  // Show loading while syncing
-  if (isSyncing) {
-    return (
-      <div className="min-h-screen bg-white py-10 px-4 md:px-8">
-        <div className="max-w-2xl mx-auto">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-2" />
-                <p className="text-gray-500">Syncing authentication...</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-white py-10 px-4 md:px-8">
-        <div className="max-w-2xl mx-auto">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-gray-500">
-                  Please log in to upload 3D models
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  // Format file size for display
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
 
   return (
-    <div className="min-h-screen bg-white py-10 px-4 md:px-8">
-      <div className="max-w-2xl mx-auto">
-        <Card>
-          <CardHeader>
-            {loading ? (
+    <div className="max-w-2xl mx-auto p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UploadCloud className="h-6 w-6" />
+            Upload 3D Model
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* File Upload */}
+          <div className="space-y-2">
+            <Label htmlFor="file">Select Model File</Label>
+            <Input
+              id="file"
+              type="file"
+              accept=".glb,.usdz,.gltf"
+              onChange={handleFileChange}
+              disabled={isUploading}
+              className="cursor-pointer"
+            />
+            <p className="text-sm text-muted-foreground">
+              Supported formats: .glb, .usdz, .gltf (Max: 100MB)
+            </p>
+            {file && (
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm font-medium">{file.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatFileSize(file.size)}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Model Name */}
+          <div className="space-y-2">
+            <Label htmlFor="name">Model Name</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter model name"
+              disabled={isUploading}
+              required
+            />
+          </div>
+
+          {/* Description */}
+          <div className="space-y-2">
+            <Label htmlFor="description">Description (Optional)</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe your 3D model..."
+              disabled={isUploading}
+              rows={3}
+            />
+          </div>
+
+          {/* Public Toggle */}
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="flex items-center gap-3">
+              {isPublic ? (
+                <Globe className="h-5 w-5 text-blue-500" />
+              ) : (
+                <Lock className="h-5 w-5 text-gray-500" />
+              )}
+              <div>
+                <p className="font-medium">
+                  {isPublic ? "Public Model" : "Private Model"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {isPublic
+                    ? "Anyone can view this model"
+                    : "Only you can view this model"}
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPublic}
+              onCheckedChange={setIsPublic}
+              disabled={isUploading}
+            />
+          </div>
+
+          {/* Upload Progress */}
+          {isUploading && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Uploading...</span>
+                <span className="text-sm text-muted-foreground">
+                  {uploadProgress}%
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Error Alert */}
+          {uploadError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{uploadError}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Success Alert */}
+          {uploadSuccess && (
+            <Alert className="border-green-200 bg-green-50">
+              <AlertCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                Model uploaded successfully! Redirecting...
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Upload Button */}
+          <Button
+            onClick={handleServerUpload}
+            disabled={!file || !name.trim() || isUploading}
+            className="w-full"
+            size="lg"
+          >
+            {isUploading ? (
               <>
-                <Skeleton className="h-8 w-52 mb-2" />
-                <Skeleton className="h-4 w-72" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Uploading... ({uploadProgress}%)
               </>
             ) : (
               <>
-                <CardTitle className="text-2xl flex items-center gap-2">
-                  <UploadCloud className="w-6 h-6" />
-                  Upload New Model
-                </CardTitle>
-                <CardDescription>
-                  Upload your 3D model files up to 100MB directly to secure
-                  storage. Supported formats: .glb, .usdz, .gltf
-                </CardDescription>
+                <UploadCloud className="mr-2 h-4 w-4" />
+                Upload Model
               </>
             )}
-          </CardHeader>
+          </Button>
 
-          <CardContent className="space-y-6">
-            {loading ? (
-              <>
-                <Skeleton className="h-32 w-full" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-20 w-full" />
-                <Skeleton className="h-6 w-40" />
-              </>
-            ) : isUploading ? (
-              <>
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Uploading: <strong>{file?.name}</strong> (
-                    {formatFileSize(file?.size || 0)})
-                  </p>
-                  <Progress value={progress} className="h-3" />
-                  <p className="text-xs text-muted-foreground text-center">
-                    {progress < 100 ? `${progress}% uploaded` : "Complete!"}
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* File Upload Area */}
-                <div className="space-y-2">
-                  <Label htmlFor="file-upload">3D Model File</Label>
-                  <div
-                    className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                      dragActive
-                        ? "border-blue-400 bg-blue-50"
-                        : "border-gray-300 hover:border-gray-400"
-                    }`}
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
-                  >
-                    <Input
-                      id="file-upload"
-                      type="file"
-                      accept=".glb,.usdz,.gltf"
-                      onChange={handleFileChange}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-
-                    <div className="flex flex-col items-center">
-                      <UploadCloud className="w-10 h-10 text-gray-400 mb-3" />
-                      <p className="text-sm font-medium text-gray-700 mb-1">
-                        {file
-                          ? `${file.name} (${formatFileSize(file.size)})`
-                          : "Drop your model here, or click to browse"}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        GLB, USDZ, GLTF files up to 100MB
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* File Info Debug */}
-                {file && (
-                  <div className="p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
-                    <strong>File Details:</strong>
-                    <br />
-                    Name: {file.name}
-                    <br />
-                    Size: {formatFileSize(file.size)}
-                    <br />
-                    Type: {file.type}
-                    <br />
-                    Size Check:{" "}
-                    {file.size > 100 * 1024 * 1024
-                      ? "❌ Too Large"
-                      : "✅ Size OK"}
-                  </div>
-                )}
-
-                {/* Model Details */}
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="model-name">Model Name *</Label>
-                    <Input
-                      id="model-name"
-                      type="text"
-                      placeholder="Enter model name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="model-description">Description</Label>
-                    <Textarea
-                      id="model-description"
-                      placeholder="Describe your 3D model (optional)"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-
-                  {/* Public/Private Toggle */}
-                  <div className="flex items-center space-x-2 p-4 rounded-lg border bg-gray-50">
-                    <Checkbox
-                      id="is-public"
-                      checked={isPublic}
-                      onCheckedChange={(checked) =>
-                        setIsPublic(checked as boolean)
-                      }
-                    />
-                    <div className="flex items-center space-x-2">
-                      {isPublic ? (
-                        <Globe className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <Lock className="w-4 h-4 text-gray-600" />
-                      )}
-                      <Label
-                        htmlFor="is-public"
-                        className="text-sm font-medium"
-                      >
-                        {isPublic ? "Public" : "Private"}
-                      </Label>
-                    </div>
-                    <p className="text-xs text-gray-500 ml-2">
-                      {isPublic
-                        ? "Anyone can view this model"
-                        : "Only you can view this model"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Error Display */}
-                {uploadError && (
-                  <div className="p-3 text-red-700 bg-red-100 border border-red-300 rounded-lg">
-                    <div className="flex items-center">
-                      <AlertCircle className="w-4 h-4 mr-2" />
-                      {uploadError}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </CardContent>
-
-          <CardFooter className="flex justify-end">
-            {loading ? (
-              <Skeleton className="h-10 w-32" />
-            ) : (
-              <Button
-                className="bg-black hover:bg-gray-800 text-white"
-                onClick={handleUpload}
-                disabled={!file || !name.trim() || isUploading}
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  "Upload Model"
-                )}
-              </Button>
-            )}
-          </CardFooter>
-        </Card>
-      </div>
+          <div className="text-xs text-muted-foreground text-center">
+            <p>✅ Server-side upload with authentication</p>
+            <p>✅ Supports large files up to 100MB</p>
+            <p>✅ Handles Vercel deployment automatically</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -1,23 +1,43 @@
 import type { NextConfig } from "next";
 
-const nextConfig = {
+const nextConfig: NextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["node-appwrite"],
   },
-  // Increase API route body size limit
-  api: {
-    bodyParser: {
-      sizeLimit: "100mb",
-    },
-  },
+
   // Image domains configuration
   images: {
     domains: ["api.qrserver.com"],
   },
-  // For handling large file uploads
-  async rewrites() {
-    return [];
+
+  // Headers for CORS and file uploads
+  async headers() {
+    return [
+      {
+        source: "/api/:path*",
+        headers: [
+          {
+            key: "Access-Control-Allow-Origin",
+            value: "*",
+          },
+          {
+            key: "Access-Control-Allow-Methods",
+            value: "GET, POST, PUT, DELETE, OPTIONS",
+          },
+          {
+            key: "Access-Control-Allow-Headers",
+            value: "Content-Type, Authorization",
+          },
+          // Increase timeout for large uploads
+          {
+            key: "Keep-Alive",
+            value: "timeout=30, max=1000",
+          },
+        ],
+      },
+    ];
   },
+
   // Webpack configuration
   webpack: (config: any) => {
     config.resolve.fallback = {
@@ -26,10 +46,6 @@ const nextConfig = {
     };
     return config;
   },
-  // Increase body size limit
-  serverRuntimeConfig: {
-    maxRequestSize: "100mb",
-  },
 };
 
-module.exports = nextConfig;
+export default nextConfig;
