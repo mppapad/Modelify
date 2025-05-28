@@ -64,8 +64,8 @@ export default function ModelUpload() {
     }
   };
 
-  // Server-side upload with progress simulation
-  const handleServerUpload = async () => {
+  // Direct client-side upload to Appwrite
+  const handleDirectUpload = async () => {
     if (!file || !name.trim()) {
       setUploadError("Please select a file and provide a name");
       return;
@@ -76,48 +76,88 @@ export default function ModelUpload() {
       return;
     }
 
+    // Use server upload for small files (under 4MB to avoid Vercel limits)
+    if (file.size < 4 * 1024 * 1024) {
+      return handleServerUpload();
+    }
+
     setIsUploading(true);
     setUploadError("");
     setUploadProgress(0);
 
     try {
-      // Create form data
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("name", name);
-      formData.append("description", description);
-      formData.append("isPublic", isPublic.toString());
+      console.log("Starting direct upload process...");
 
-      // Simulate progress for user feedback
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev < 90) return prev + 10;
-          return prev;
-        });
-      }, 500);
-
-      console.log("Starting server-side upload...");
-
-      // Upload to server (which handles Appwrite upload)
-      const response = await fetch("/api/models/upload-large", {
+      // Step 1: Get upload URL and permissions from our API
+      const initResponse = await fetch("/api/models/direct-upload", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          name,
+          description,
+          isPublic,
+        }),
       });
 
-      clearInterval(progressInterval);
-      setUploadProgress(100);
+      if (!initResponse.ok) {
+        const errorData = await initResponse.json();
+        throw new Error(errorData.error || "Failed to initialize upload");
+      }
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      const { fileId, bucketId, uploadUrl, documentId } =
+        await initResponse.json();
+      console.log("Upload initialized:", { fileId, bucketId, documentId });
+
+      setUploadProgress(10);
+
+      // Step 2: Upload directly to Appwrite
+      const formData = new FormData();
+      formData.append("fileId", fileId);
+      formData.append("file", file);
+
+      console.log("Uploading to Appwrite...");
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "POST",
+        body: formData,
+        headers: {
+          "X-Appwrite-Project": process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!,
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error("Appwrite upload failed:", errorText);
         throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
+          `Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`
         );
       }
 
-      const result = await response.json();
-      console.log("Upload successful:", result);
+      setUploadProgress(90);
 
+      // Step 3: Notify our API that upload is complete
+      const completeResponse = await fetch("/api/models/upload-complete", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentId,
+          fileId,
+          success: true,
+        }),
+      });
+
+      if (!completeResponse.ok) {
+        const errorData = await completeResponse.json();
+        throw new Error(errorData.error || "Failed to complete upload");
+      }
+
+      setUploadProgress(100);
       setUploadSuccess(true);
+
+      console.log("Upload completed successfully!");
 
       // Reset form after success
       setTimeout(() => {
@@ -127,8 +167,6 @@ export default function ModelUpload() {
         setIsPublic(false);
         setUploadSuccess(false);
         setUploadProgress(0);
-
-        // Redirect to models page
         router.push("/dashboard/models");
       }, 2000);
     } catch (error) {
@@ -162,6 +200,70 @@ export default function ModelUpload() {
     }
   };
 
+  // Server-side upload for small files (< 4MB)
+  const handleServerUpload = async () => {
+    if (!file || !name.trim()) {
+      setUploadError("Please select a file and provide a name");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError("");
+    setUploadProgress(0);
+
+    try {
+      // Create form data
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("name", name);
+      formData.append("description", description);
+      formData.append("isPublic", isPublic.toString());
+
+      // Simulate progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => (prev < 90 ? prev + 10 : prev));
+      }, 200);
+
+      console.log("Starting server-side upload for small file...");
+
+      const response = await fetch("/api/models/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || `HTTP error! status: ${response.status}`
+        );
+      }
+
+      const result = await response.json();
+      console.log("Server upload successful:", result);
+
+      setUploadSuccess(true);
+
+      // Reset form after success
+      setTimeout(() => {
+        setFile(null);
+        setName("");
+        setDescription("");
+        setIsPublic(false);
+        setUploadSuccess(false);
+        setUploadProgress(0);
+        router.push("/dashboard/models");
+      }, 2000);
+    } catch (error) {
+      console.error("Server upload error:", error);
+      setUploadError(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // Format file size for display
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 Bytes";
@@ -169,6 +271,13 @@ export default function ModelUpload() {
     const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  // Determine upload method based on file size
+  const getUploadMethod = () => {
+    if (!file) return "No file selected";
+    if (file.size < 4 * 1024 * 1024) return "Server Upload (Faster)";
+    return "Direct Upload (Large Files)";
   };
 
   return (
@@ -199,7 +308,7 @@ export default function ModelUpload() {
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-sm font-medium">{file.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {formatFileSize(file.size)}
+                  {formatFileSize(file.size)} • {getUploadMethod()}
                 </p>
               </div>
             )}
@@ -261,7 +370,11 @@ export default function ModelUpload() {
           {isUploading && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Uploading...</span>
+                <span className="text-sm font-medium">
+                  {file && file.size >= 4 * 1024 * 1024
+                    ? "Uploading directly..."
+                    : "Processing..."}
+                </span>
                 <span className="text-sm text-muted-foreground">
                   {uploadProgress}%
                 </span>
@@ -295,7 +408,7 @@ export default function ModelUpload() {
 
           {/* Upload Button */}
           <Button
-            onClick={handleServerUpload}
+            onClick={handleDirectUpload}
             disabled={!file || !name.trim() || isUploading}
             className="w-full"
             size="lg"
@@ -313,10 +426,11 @@ export default function ModelUpload() {
             )}
           </Button>
 
-          <div className="text-xs text-muted-foreground text-center">
-            <p>✅ Server-side upload with authentication</p>
-            <p>✅ Supports large files up to 100MB</p>
-            <p>✅ Handles Vercel deployment automatically</p>
+          <div className="text-xs text-muted-foreground text-center space-y-1">
+            <p>✅ Automatic upload method selection based on file size</p>
+            <p>✅ Small files (&lt;4MB): Fast server upload</p>
+            <p>✅ Large files (4MB-100MB): Direct client upload</p>
+            <p>✅ Works on all Vercel plans</p>
           </div>
         </CardContent>
       </Card>
