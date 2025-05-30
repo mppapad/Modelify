@@ -2,14 +2,32 @@
 
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import {
+  Search,
+  Download,
+  FileText,
+  Loader2,
+  RefreshCcw,
+  MessageCircleWarning,
+  ExternalLink,
+  Copy,
+  MoreVertical,
+  Edit,
+  Code,
+  Trash2,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,42 +37,21 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import {
-  Search,
-  MoreVertical,
-  Download,
-  Trash2,
-  Eye,
-  Upload,
-  Filter,
-  Globe,
-  Lock,
-  Edit,
-  Loader2,
-  RefreshCcw,
-  FileText,
-} from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 
 interface Model {
-  $id?: string; // Appwrite uses $id
-  id?: string; // Fallback for compatibility
+  $id: string;
   name: string;
   description: string;
   fileId: string;
@@ -66,98 +63,62 @@ interface Model {
   createdAt: string;
 }
 
-// Loading Skeleton Components
+// Loading Skeleton
 const ModelRowSkeleton = () => (
   <Card className="mb-4">
-    <CardContent className="p-4 lg:p-6">
-      <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-        {/* File icon skeleton */}
-        <div className="w-12 h-12 bg-gray-200 rounded-lg animate-pulse flex-shrink-0"></div>
-
-        {/* Content skeleton */}
-        <div className="flex-1 min-w-0 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-            <div className="flex-1 space-y-2">
-              <div className="h-5 bg-gray-200 rounded animate-pulse w-48 max-w-full"></div>
-              <div className="h-4 bg-gray-200 rounded animate-pulse w-32 max-w-full"></div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="h-6 bg-gray-200 rounded-full animate-pulse w-12"></div>
-              <div className="h-6 bg-gray-200 rounded-full animate-pulse w-16"></div>
-            </div>
-          </div>
-          <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4 max-w-full"></div>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="h-3 bg-gray-200 rounded animate-pulse w-24"></div>
-            <div className="flex gap-2 flex-wrap">
-              <div className="h-8 bg-gray-200 rounded animate-pulse w-16"></div>
-              <div className="h-8 bg-gray-200 rounded animate-pulse w-20"></div>
-              <div className="h-8 bg-gray-200 rounded animate-pulse w-8"></div>
-            </div>
-          </div>
+    <CardContent className="p-4">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-gray-200 rounded animate-pulse w-48"></div>
+          <div className="h-3 bg-gray-200 rounded animate-pulse w-32"></div>
+        </div>
+        <div className="flex gap-2">
+          <div className="h-8 bg-gray-200 rounded animate-pulse w-20"></div>
+          <div className="h-8 bg-gray-200 rounded animate-pulse w-16"></div>
         </div>
       </div>
     </CardContent>
   </Card>
 );
 
-const StatCardSkeleton = () => (
-  <Card>
-    <CardContent className="p-4 lg:p-6">
-      <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3 mb-2"></div>
-      <div className="h-8 bg-gray-200 rounded animate-pulse w-1/3"></div>
-    </CardContent>
-  </Card>
-);
-
-export default function ModelsPage() {
+export default function SimpleModelsPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [filteredModels, setFilteredModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState<string>("all");
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [updatingModel, setUpdatingModel] = useState(false);
+
+  // Delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [modelToDelete, setModelToDelete] = useState<Model | null>(null);
+
+  // Edit modal
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<Model | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editIsPublic, setEditIsPublic] = useState(false);
-  const [updatingModel, setUpdatingModel] = useState(false);
-  // Add state to track dropdown open status
-  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
 
-  // Helper function to get the model ID (handles both $id and id)
-  const getModelId = (model: Model): string => {
-    return model.$id || model.id || "";
-  };
+  // Embed modal
+  const [embedDialogOpen, setEmbedDialogOpen] = useState(false);
+  const [embedModel, setEmbedModel] = useState<Model | null>(null);
 
   useEffect(() => {
     fetchModels();
   }, []);
 
   useEffect(() => {
-    let filtered = models;
-
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (model) =>
-          model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          model.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          model.fileName?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (filterType !== "all") {
-      filtered = filtered.filter(
-        (model) =>
-          getFileExtension(model.fileName).toLowerCase() ===
-          filterType.toLowerCase()
-      );
-    }
-
+    const filtered = models.filter(
+      (model) =>
+        model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        model.fileName.toLowerCase().includes(searchTerm.toLowerCase())
+    );
     setFilteredModels(filtered);
-  }, [models, searchTerm, filterType]);
+  }, [models, searchTerm]);
 
   const fetchModels = async () => {
     try {
@@ -169,16 +130,71 @@ export default function ModelsPage() {
       }
 
       const data = await response.json();
-      console.log("Fetched models:", data.models);
       setModels(data.models || []);
     } catch (error) {
       console.error("Error fetching models:", error);
-      toast.error("Failed to fetch models. Please try again.");
+      toast.error("Failed to fetch models");
     } finally {
       setLoading(false);
     }
   };
 
+  // Generate file URL
+  const getFileUrl = (fileId: string) => {
+    const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
+    const bucketId = process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID;
+    const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
+
+    return `${endpoint}/storage/buckets/${bucketId}/files/${fileId}/download?project=${projectId}&mode=admin`;
+  };
+
+  // Helper function to get model ID
+  const getModelId = (model: Model) => model.$id;
+
+  // Download file function
+  const downloadModel = async (model: Model) => {
+    try {
+      setDownloadingId(model.$id);
+
+      const fileUrl = getFileUrl(model.fileId);
+
+      // Create a temporary link and trigger download
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.download = model.fileName;
+      link.target = "_blank";
+
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Download started!");
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast.error("Failed to download file");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  // Copy URL to clipboard
+  const copyFileUrl = async (model: Model) => {
+    try {
+      setCopyingId(model.$id);
+      const fileUrl = getFileUrl(model.fileId);
+
+      await navigator.clipboard.writeText(fileUrl);
+      toast.success("File URL copied to clipboard!");
+    } catch (error) {
+      console.error("Failed to copy URL:", error);
+      toast.error("Failed to copy URL");
+    } finally {
+      setCopyingId(null);
+    }
+  };
+
+  // Delete model function
   const deleteModel = async (modelId: string) => {
     if (!modelId || modelId === "undefined") {
       console.error("Invalid model ID:", modelId);
@@ -218,6 +234,7 @@ export default function ModelsPage() {
     }
   };
 
+  // Update model function
   const updateModel = async () => {
     if (!editingModel) return;
 
@@ -268,83 +285,97 @@ export default function ModelsPage() {
     }
   };
 
-  const downloadModel = async (model: Model) => {
-    try {
-      const fileUrl = getFileUrl(model.fileId, true);
-      const link = document.createElement("a");
-      link.href = fileUrl;
-      link.download = model.fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      toast.success("Model download started.");
-    } catch (error) {
-      console.error("Error downloading model:", error);
-      toast.error("Failed to download model. Please try again.");
-    }
-  };
-
-  const exportModelsData = async () => {
-    try {
-      setExporting(true);
-
-      const exportData = models.map((model) => ({
-        id: getModelId(model),
-        name: model.name,
-        description: model.description,
-        fileName: model.fileName,
-        fileSize: model.fileSize,
-        mimeType: model.mimeType,
-        createdAt: model.createdAt,
-        isPublic: model.isPublic,
-      }));
-
-      const dataStr = JSON.stringify(exportData, null, 2);
-      const dataUri =
-        "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
-
-      const exportFileDefaultName = `models-export-${
-        new Date().toISOString().split("T")[0]
-      }.json`;
-
-      const linkElement = document.createElement("a");
-      linkElement.setAttribute("href", dataUri);
-      linkElement.setAttribute("download", exportFileDefaultName);
-      linkElement.click();
-
-      toast.success("Models data exported successfully.");
-    } catch (error) {
-      console.error("Error exporting data:", error);
-      toast.error("Failed to export data. Please try again.");
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  // Fixed openEditModal function to properly handle dropdown closure
+  // Modal handlers
   const openEditModal = (model: Model) => {
-    console.log("Opening edit modal for model:", model);
-
-    // Close any open dropdown first
-    setDropdownOpen(null);
-
-    // Small delay to ensure dropdown is closed before opening modal
-    setTimeout(() => {
-      setEditingModel(model);
-      setEditName(model.name);
-      setEditDescription(model.description);
-      setEditIsPublic(model.isPublic || false);
-      setEditModalOpen(true);
-    }, 100);
+    setEditingModel(model);
+    setEditName(model.name);
+    setEditDescription(model.description || "");
+    setEditIsPublic(model.isPublic || false);
+    setEditDialogOpen(true);
   };
 
   const closeEditModal = () => {
-    setEditModalOpen(false);
+    setEditDialogOpen(false);
     setEditingModel(null);
     setEditName("");
     setEditDescription("");
     setEditIsPublic(false);
+  };
+
+  const openDeleteDialog = (model: Model) => {
+    setModelToDelete(model);
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setModelToDelete(null);
+  };
+
+  const confirmDelete = () => {
+    if (modelToDelete) {
+      deleteModel(getModelId(modelToDelete));
+      closeDeleteDialog();
+    }
+  };
+
+  const openEmbedModal = (model: Model) => {
+    setEmbedModel(model);
+    setEmbedDialogOpen(true);
+  };
+
+  const closeEmbedModal = () => {
+    setEmbedDialogOpen(false);
+    setEmbedModel(null);
+  };
+
+  const copyEmbedCode = async (embedCode: string) => {
+    try {
+      await navigator.clipboard.writeText(embedCode);
+      toast.success("Embed code copied to clipboard!");
+    } catch (error) {
+      toast.error("Failed to copy embed code");
+    }
+  };
+
+  // Generate embed code
+  const generateEmbedCode = (model: Model) => {
+    const fileUrl = getFileUrl(model.fileId);
+    const extension = getFileExtension(model.fileName);
+
+    if (extension === "glb" || extension === "gltf") {
+      return `<model-viewer src="${fileUrl}" alt="${model.name}" auto-rotate camera-controls></model-viewer>
+<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>`;
+    } else {
+      return `<!-- Embed code for ${extension.toUpperCase()} files -->
+<iframe src="${fileUrl}" width="800" height="600" frameborder="0"></iframe>`;
+    }
+  };
+
+  // Export all URLs as JSON
+  const exportFileUrls = () => {
+    const urlsData = models.map((model) => ({
+      id: model.$id,
+      name: model.name,
+      fileName: model.fileName,
+      fileUrl: getFileUrl(model.fileId),
+      createdAt: model.createdAt,
+    }));
+
+    const dataStr = JSON.stringify(urlsData, null, 2);
+    const dataUri =
+      "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
+
+    const exportFileName = `model-urls-${
+      new Date().toISOString().split("T")[0]
+    }.json`;
+
+    const linkElement = document.createElement("a");
+    linkElement.setAttribute("href", dataUri);
+    linkElement.setAttribute("download", exportFileName);
+    linkElement.click();
+
+    toast.success("URLs exported successfully!");
   };
 
   const formatFileSize = (bytes: number) => {
@@ -363,462 +394,353 @@ export default function ModelsPage() {
     const extension = getFileExtension(fileName);
     switch (extension) {
       case "glb":
-        return "bg-blue-100 text-blue-800 border-blue-200";
+        return "bg-blue-100 text-blue-800";
       case "gltf":
-        return "bg-green-100 text-green-800 border-green-200";
+        return "bg-green-100 text-green-800";
       case "usdz":
-        return "bg-purple-100 text-purple-800 border-purple-200";
+        return "bg-purple-100 text-purple-800";
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
+        return "bg-gray-100 text-gray-800";
     }
   };
 
-  const getFileIcon = (fileName: string) => {
-    const extension = getFileExtension(fileName);
-    return (
-      <div
-        className={`w-12 h-12 rounded-lg flex items-center justify-center ${getFileTypeColor(
-          fileName
-        )} border`}
-      >
-        <FileText className="w-6 h-6" />
-      </div>
-    );
-  };
-
-  const getFileUrl = (fileId: string, download = false) => {
-    const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
-    const bucketId = process.env.NEXT_PUBLIC_BUCKET_ID;
-    const downloadParam = download ? "?download=true" : "";
-    return `${endpoint}/storage/buckets/${bucketId}/files/${fileId}/view${downloadParam}`;
-  };
-
-  const statsData = [
-    {
-      title: "Total Models",
-      value: models.length,
-    },
-    {
-      title: "GLB Files",
-      value: models.filter((m) => getFileExtension(m.fileName) === "glb")
-        .length,
-    },
-    {
-      title: "GLTF Files",
-      value: models.filter((m) => getFileExtension(m.fileName) === "gltf")
-        .length,
-    },
-    {
-      title: "USDZ Files",
-      value: models.filter((m) => getFileExtension(m.fileName) === "usdz")
-        .length,
-    },
-  ];
-
   return (
-    <div className="w-full max-w-full overflow-hidden">
-      <div className="container mx-auto p-4 lg:p-6 space-y-6 max-w-full">
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl lg:text-3xl font-bold truncate">
-              3D Models
-            </h1>
-            <p className="text-muted-foreground text-sm lg:text-base">
-              Manage your uploaded 3D models
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-            <Button
-              onClick={() => {
-                setSearchTerm("");
-                fetchModels();
-                toast.success("Model list refreshed");
-              }}
-              disabled={loading}
-              variant="outline"
-              size="sm"
-              className="flex-1 sm:flex-none"
-            >
-              <RefreshCcw className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
-            <Button
-              onClick={exportModelsData}
-              disabled={exporting || models.length === 0}
-              variant="outline"
-              size="sm"
-              className="flex-1 sm:flex-none"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              {exporting ? "Exporting..." : "Export Data"}
-            </Button>
-            <Link href="/dashboard/upload" className="flex-1 sm:flex-none">
-              <Button size="sm" className="w-full">
-                <Upload className="w-4 h-4 mr-2" />
-                Upload Model
-              </Button>
-            </Link>
-          </div>
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">3D Models</h1>
+          <p className="text-muted-foreground">
+            Download and manage your files
+          </p>
         </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-          {loading
-            ? Array.from({ length: 4 }).map((_, index) => (
-                <StatCardSkeleton key={`stat-skeleton-${index}`} />
-              ))
-            : statsData.map((stat, index) => (
-                <Card key={`stat-${index}`}>
-                  <CardContent className="p-4 lg:p-6">
-                    <div className="text-xs lg:text-sm font-medium text-muted-foreground mb-2">
-                      {stat.title}
-                    </div>
-                    <div className="text-xl lg:text-2xl font-bold">
-                      {stat.value}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-        </div>
-
-        {/* Search and Filter */}
-        <div className="flex flex-col sm:flex-row gap-3 lg:gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input
-              placeholder="Search models..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-              disabled={loading}
-            />
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                disabled={loading}
-                className="w-full sm:w-auto"
-              >
-                <Filter className="w-4 h-4 mr-2" />
-                {filterType === "all" ? "All Types" : filterType.toUpperCase()}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setFilterType("all")}>
-                All Types
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setFilterType("glb")}>
-                GLB Files
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setFilterType("gltf")}>
-                GLTF Files
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setFilterType("usdz")}>
-                USDZ Files
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        {/* Models List */}
-        <div className="space-y-4">
-          {loading ? (
-            // Loading skeletons
-            Array.from({ length: 6 }).map((_, index) => (
-              <ModelRowSkeleton key={`skeleton-${index}`} />
-            ))
-          ) : filteredModels.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-muted-foreground text-sm lg:text-base">
-                {searchTerm || filterType !== "all"
-                  ? "No models match your search criteria"
-                  : "No models found. Upload your first 3D model to get started."}
-              </div>
-              {!searchTerm && filterType === "all" && (
-                <Link href="/dashboard/upload">
-                  <Button className="mt-4" size="sm">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload Your First Model
-                  </Button>
-                </Link>
-              )}
-            </div>
-          ) : (
-            filteredModels.map((model) => {
-              const modelId = getModelId(model);
-              const isDeleting = deletingId === modelId;
-
-              return (
-                <Card
-                  key={modelId}
-                  className="hover:shadow-md transition-shadow"
-                >
-                  <CardContent className="p-4 lg:p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                      {/* File Icon */}
-                      <div className="flex-shrink-0">
-                        {getFileIcon(model.fileName)}
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0 space-y-3">
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-base lg:text-lg font-semibold truncate">
-                              {model.name}
-                            </h3>
-                            <p className="text-xs lg:text-sm text-muted-foreground truncate">
-                              {model.fileName} •{" "}
-                              {formatFileSize(model.fileSize)}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge
-                              className={getFileTypeColor(model.fileName)}
-                              variant="outline"
-                            >
-                              {getFileExtension(model.fileName).toUpperCase()}
-                            </Badge>
-                            {model.isPublic ? (
-                              <Badge
-                                variant="outline"
-                                className="text-green-700 border-green-200"
-                              >
-                                <Globe className="w-3 h-3 mr-1" />
-                                Public
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline">
-                                <Lock className="w-3 h-3 mr-1" />
-                                Private
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-
-                        {model.description && (
-                          <p className="text-xs lg:text-sm text-muted-foreground line-clamp-2">
-                            {model.description}
-                          </p>
-                        )}
-
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                          <div className="text-xs text-muted-foreground">
-                            Uploaded{" "}
-                            {format(new Date(model.createdAt), "MMM d, yyyy")}
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 sm:flex-none"
-                            >
-                              <Eye className="w-4 h-4 mr-1" />
-                              View
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => downloadModel(model)}
-                              className="flex-1 sm:flex-none"
-                            >
-                              <Download className="w-4 h-4 mr-1" />
-                              Download
-                            </Button>
-                            <DropdownMenu
-                              open={dropdownOpen === modelId}
-                              onOpenChange={(open) =>
-                                setDropdownOpen(open ? modelId : null)
-                              }
-                            >
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={isDeleting}
-                                >
-                                  {isDeleting ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <MoreVertical className="w-4 h-4" />
-                                  )}
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => {}}>
-                                  <Eye className="w-4 h-4 mr-2" />
-                                  View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => openEditModal(model)}
-                                >
-                                  <Edit className="w-4 h-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => downloadModel(model)}
-                                >
-                                  <Download className="w-4 h-4 mr-2" />
-                                  Download
-                                </DropdownMenuItem>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <DropdownMenuItem
-                                      onSelect={(e) => e.preventDefault()}
-                                      className="text-red-600 focus:text-red-600"
-                                    >
-                                      <Trash2 className="w-4 h-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>
-                                        Delete Model
-                                      </AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Are you sure you want to delete "
-                                        {model.name}"? This action cannot be
-                                        undone and will permanently remove the
-                                        model from both the database and
-                                        storage.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>
-                                        Cancel
-                                      </AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={() => deleteModel(modelId)}
-                                        disabled={isDeleting}
-                                        className="bg-red-600 hover:bg-red-700"
-                                      >
-                                        {isDeleting ? "Deleting..." : "Delete"}
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })
-          )}
-        </div>
-
-        {/* Edit Model Dialog - Improved accessibility and focus management */}
-        <Dialog
-          open={editModalOpen}
-          onOpenChange={(open) => {
-            if (!open && !updatingModel) {
-              closeEditModal();
-            }
-          }}
-        >
-          <DialogContent
-            className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto"
-            onPointerDownOutside={(e) => {
-              if (updatingModel) {
-                e.preventDefault();
-              }
-            }}
-            onEscapeKeyDown={(e) => {
-              if (updatingModel) {
-                e.preventDefault();
-              }
-            }}
-            // Ensure proper focus management
-            onOpenAutoFocus={(e) => {
-              // Prevent autofocus if there are other modals open
-              if (dropdownOpen) {
-                e.preventDefault();
-              }
-            }}
+        <div className="flex gap-2">
+          <Button
+            onClick={fetchModels}
+            disabled={loading}
+            variant="outline"
+            size="sm"
           >
-            <DialogHeader>
-              <DialogTitle>Edit Model</DialogTitle>
-              <DialogDescription>
-                Update your model details and visibility settings.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-name">Name</Label>
-                <Input
-                  id="edit-name"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Model name"
-                  disabled={updatingModel}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-description">Description</Label>
-                <Textarea
-                  id="edit-description"
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  rows={3}
-                  placeholder="Model description"
-                  className="resize-none"
-                  disabled={updatingModel}
-                />
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="edit-public"
-                  checked={editIsPublic}
-                  onCheckedChange={setEditIsPublic}
-                  disabled={updatingModel}
-                />
-                <Label
-                  htmlFor="edit-public"
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  {editIsPublic ? (
-                    <Globe className="w-4 h-4" />
-                  ) : (
-                    <Lock className="w-4 h-4" />
-                  )}
-                  {editIsPublic ? "Public" : "Private"}
-                </Label>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                <Button
-                  onClick={updateModel}
-                  className="flex-1"
-                  disabled={updatingModel}
-                >
-                  {updatingModel ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    "Save Changes"
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={closeEditModal}
-                  className="flex-1"
-                  disabled={updatingModel}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            <RefreshCcw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+          <Button
+            onClick={exportFileUrls}
+            disabled={models.length === 0}
+            variant="outline"
+            size="sm"
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            Export URLs
+          </Button>
+        </div>
       </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-sm font-medium text-muted-foreground">
+              Total Models
+            </div>
+            <div className="text-2xl font-bold">{models.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-sm font-medium text-muted-foreground">
+              GLB Files
+            </div>
+            <div className="text-2xl font-bold">
+              {
+                models.filter((m) => getFileExtension(m.fileName) === "glb")
+                  .length
+              }
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-sm font-medium text-muted-foreground">
+              GLTF Files
+            </div>
+            <div className="text-2xl font-bold">
+              {
+                models.filter((m) => getFileExtension(m.fileName) === "gltf")
+                  .length
+              }
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-sm font-medium text-muted-foreground">
+              USDZ Files
+            </div>
+            <div className="text-2xl font-bold">
+              {
+                models.filter((m) => getFileExtension(m.fileName) === "usdz")
+                  .length
+              }
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+        <Input
+          placeholder="Search models..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+          disabled={loading}
+        />
+      </div>
+      {/* Public Notice */}
+      <div className="flex items-center gap-3 p-4 border rounded-lg bg-red-50">
+        <MessageCircleWarning className="h-5 w-5 text-red-800" />
+        <div>
+          <p className="font-medium text-red-800 ">Warning</p>
+          <p className="text-sm text-red-700 ">
+            Edit, embed options are broken, DO NOT USE!
+          </p>
+        </div>
+      </div>
+      {/* Models List */}
+      <div className="space-y-4">
+        {loading ? (
+          Array.from({ length: 3 }).map((_, index) => (
+            <ModelRowSkeleton key={index} />
+          ))
+        ) : filteredModels.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-muted-foreground">
+              {searchTerm ? "No models match your search" : "No models found"}
+            </div>
+          </div>
+        ) : (
+          filteredModels.map((model) => (
+            <Card key={model.$id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-4">
+                  {/* File Icon */}
+                  <div
+                    className={`w-12 h-12 rounded-lg flex items-center justify-center ${getFileTypeColor(
+                      model.fileName
+                    )}`}
+                  >
+                    <FileText className="w-6 h-6" />
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold truncate">{model.name}</h3>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {model.fileName} • {formatFileSize(model.fileSize)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(model.createdAt), "MMM d, yyyy")}
+                    </p>
+                  </div>
+
+                  {/* File Type Badge */}
+                  <Badge className={getFileTypeColor(model.fileName)}>
+                    {getFileExtension(model.fileName).toUpperCase()}
+                  </Badge>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => copyFileUrl(model)}
+                      disabled={copyingId === model.$id}
+                    >
+                      {copyingId === model.$id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      onClick={() => downloadModel(model)}
+                      disabled={downloadingId === model.$id}
+                    >
+                      {downloadingId === model.$id ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Downloading...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4 mr-2" />
+                          Download
+                        </>
+                      )}
+                    </Button>
+
+                    {/* Three Dots Menu */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="outline">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEditModal(model)}>
+                          <Edit className="w-4 h-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openEmbedModal(model)}>
+                          <Code className="w-4 h-4 mr-2" />
+                          Embed
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => openDeleteDialog(model)}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the
+              model "{modelToDelete?.name}" and remove it from our servers.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={closeDeleteDialog}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deletingId === modelToDelete?.$id}
+            >
+              {deletingId === modelToDelete?.$id ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Model Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Model</DialogTitle>
+            <DialogDescription>
+              Make changes to your model here. Click save when you're done.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="description" className="text-right">
+                Description
+              </Label>
+              <Textarea
+                id="description"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="public" className="text-right">
+                Public
+              </Label>
+              <Switch
+                id="public"
+                checked={editIsPublic}
+                onCheckedChange={setEditIsPublic}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEditModal}>
+              Cancel
+            </Button>
+            <Button onClick={updateModel} disabled={updatingModel}>
+              {updatingModel ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Embed Code Dialog */}
+      <Dialog open={embedDialogOpen} onOpenChange={setEmbedDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Embed Code</DialogTitle>
+            <DialogDescription>
+              Copy this code to embed your 3D model on your website.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {embedModel && (
+              <div className="relative">
+                <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
+                  <code>{generateEmbedCode(embedModel)}</code>
+                </pre>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="absolute top-2 right-2"
+                  onClick={() => copyEmbedCode(generateEmbedCode(embedModel))}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={closeEmbedModal}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

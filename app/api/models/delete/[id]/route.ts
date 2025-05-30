@@ -11,7 +11,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Await the params since it's now a Promise in Next.js App Router
+  // Await the params since it's a Promise
   const resolvedParams = await params;
 
   console.log("=== DELETE REQUEST DEBUG ===");

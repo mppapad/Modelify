@@ -23,7 +23,7 @@ export default async function AccountPage() {
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Account</h1>
               <p className="text-muted-foreground">
-                Manage your account settings and preferences.
+                Delete your account if you no longer wish to use Modelify.
               </p>
             </div>
 

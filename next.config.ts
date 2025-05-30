@@ -1,10 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["node-appwrite"],
-  },
-
   // Image domains configuration
   images: {
     domains: ["api.qrserver.com"],
@@ -36,15 +32,6 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
-  },
-
-  // Webpack configuration
-  webpack: (config: any) => {
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-    };
-    return config;
   },
 };
 

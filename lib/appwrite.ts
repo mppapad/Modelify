@@ -59,4 +59,58 @@ export const createAppwriteUserId = (kindeUserId: string): string => {
   return safeId.substring(0, 36);
 };
 
+// Admin client for server-side operations - lazy initialization
+let _adminClient: Client | null = null;
+let _adminDatabases: Databases | null = null;
+let _adminStorage: Storage | null = null;
+
+const createAdminClient = () => {
+  if (_adminClient) return _adminClient;
+
+  if (!process.env.APPWRITE_API_KEY) {
+    throw new Error(
+      "APPWRITE_API_KEY environment variable is required for server-side operations"
+    );
+  }
+
+  _adminClient = new Client()
+    .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!)
+    .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!);
+
+  // Set API key using header (most compatible approach)
+  _adminClient.headers = {
+    ..._adminClient.headers,
+    "X-Appwrite-Key": process.env.APPWRITE_API_KEY,
+  };
+
+  return _adminClient;
+};
+
+// Lazy getters for admin instances - only initialize when accessed
+export const adminDatabases = new Proxy({} as Databases, {
+  get(target, prop) {
+    if (!_adminDatabases) {
+      _adminDatabases = new Databases(createAdminClient());
+    }
+    return (_adminDatabases as any)[prop];
+  },
+});
+
+export const adminStorage = new Proxy({} as Storage, {
+  get(target, prop) {
+    if (!_adminStorage) {
+      _adminStorage = new Storage(createAdminClient());
+    }
+    return (_adminStorage as any)[prop];
+  },
+});
+
+// Additional exports for compatibility
+export const config = {
+  databaseId: DATABASE_ID,
+  usersCollectionId: USERS_COLLECTION_ID,
+  modelsCollectionId: MODELS_COLLECTION_ID,
+  bucketId: BUCKET_ID,
+};
+
 export { client, ID };

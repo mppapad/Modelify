@@ -1,107 +1,149 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
-import {
-  databases,
-  storage,
-  DATABASE_ID,
-  MODELS_COLLECTION_ID,
-  BUCKET_ID,
-} from "@/lib/appwrite-server";
-import { createAppwriteUserId } from "@/lib/appwrite";
-import { Query } from "node-appwrite";
+import { adminDatabases, adminStorage, config } from "@/lib/appwrite";
 
-export async function GET(request: NextRequest) {
+// GET - Get single model
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { getUser } = getKindeServerSession();
     const user = await getUser();
+    const { id } = await params; // Await the params
 
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not authenticated" },
-        { status: 401 }
-      );
-    }
-
-    const appwriteUserId = createAppwriteUserId(user.id);
-    const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get("limit") || "50");
-    const offset = parseInt(searchParams.get("offset") || "0");
-    const search = searchParams.get("search") || "";
-
-    // Build queries
-    const queries = [
-      Query.equal("userId", appwriteUserId),
-      Query.orderDesc("$createdAt"),
-      Query.limit(limit),
-      Query.offset(offset),
-    ];
-
-    // Add search filter if provided
-    if (search) {
-      queries.push(Query.search("name", search));
-    }
-
-    // Query documents belonging to the current user
-    const documents = await databases.listDocuments(
-      DATABASE_ID,
-      MODELS_COLLECTION_ID,
-      queries
+    const model = await adminDatabases.getDocument(
+      config.databaseId,
+      config.modelsCollectionId,
+      id
     );
 
-    // Enhance models with file information
-    const modelsWithFileInfo = await Promise.all(
-      documents.documents.map(async (model) => {
-        try {
-          // Get file information
-          const file = await storage.getFile(BUCKET_ID, model.fileId);
+    // Check if user can access this model
+    if (!model.isPublic && (!user || model.kindeUserId !== user.id)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-          // Generate file URL for download/preview
-          const fileUrl = storage.getFileDownload(BUCKET_ID, model.fileId);
+    return NextResponse.json({
+      success: true,
+      model,
+    });
+  } catch (error) {
+    console.error("Error fetching model:", error);
+    return NextResponse.json(
+      {
+        error: "Model not found",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 404 }
+    );
+  }
+}
 
-          return {
-            ...model,
-            fileSize: file.sizeOriginal || 0,
-            fileSizeMB:
-              Math.round(((file.sizeOriginal || 0) / (1024 * 1024)) * 100) /
-              100,
-            fileUrl: fileUrl.toString(),
-            fileName: file.name,
-            mimeType: file.mimeType,
-            views: model.views || 0,
-            createdAt: model.$createdAt,
-            updatedAt: model.$updatedAt,
-          };
-        } catch (fileError) {
-          console.error(
-            `Error getting file info for model ${model.$id}:`,
-            fileError
-          );
-          return {
-            ...model,
-            fileSize: 0,
-            fileSizeMB: 0,
-            fileUrl: null,
-            fileName: "Unknown",
-            mimeType: "Unknown",
-            views: model.views || 0,
-            createdAt: model.$createdAt,
-            updatedAt: model.$updatedAt,
-          };
-        }
-      })
+// PUT - Update model
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { getUser } = getKindeServerSession();
+    const user = await getUser();
+    const { id } = await params; // Await the params
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { name, description, isPublic } = body;
+
+    // Check if user owns this model
+    const existingModel = await adminDatabases.getDocument(
+      config.databaseId,
+      config.modelsCollectionId,
+      id
+    );
+
+    if (existingModel.kindeUserId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const updatedModel = await adminDatabases.updateDocument(
+      config.databaseId,
+      config.modelsCollectionId,
+      id,
+      {
+        ...(name && { name }),
+        ...(description !== undefined && { description }),
+        ...(isPublic !== undefined && { isPublic }),
+      }
     );
 
     return NextResponse.json({
-      models: modelsWithFileInfo,
-      total: documents.total,
-      limit,
-      offset,
-      hasMore: offset + limit < documents.total,
+      success: true,
+      model: updatedModel,
     });
-  } catch (error: any) {
-    console.error("Error fetching user models:", error);
+  } catch (error) {
+    console.error("Error updating model:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to fetch models" },
+      {
+        error: "Failed to update model",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE - Delete model
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { getUser } = getKindeServerSession();
+    const user = await getUser();
+    const { id } = await params; // Await the params
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check if user owns this model
+    const existingModel = await adminDatabases.getDocument(
+      config.databaseId,
+      config.modelsCollectionId,
+      id
+    );
+
+    if (existingModel.kindeUserId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Delete file from storage
+    try {
+      await adminStorage.deleteFile(config.bucketId, existingModel.fileId);
+    } catch (error) {
+      console.warn("Failed to delete file from storage:", error);
+    }
+
+    // Delete model record
+    await adminDatabases.deleteDocument(
+      config.databaseId,
+      config.modelsCollectionId,
+      id
+    );
+
+    return NextResponse.json({
+      success: true,
+      message: "Model deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting model:", error);
+    return NextResponse.json(
+      {
+        error: "Failed to delete model",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AccountForm } from "@/components/account/account-form";
 import {
   Card,
   CardContent,
@@ -49,26 +48,6 @@ export function AccountPageClient({ userData }: AccountPageClientProps) {
       <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <Skeleton className="h-6 w-24 mb-2" />
-            <Skeleton className="h-4 w-3/4" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="flex justify-end">
-              <Skeleton className="h-10 w-24" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
             <Skeleton className="h-6 w-32 mb-2" />
             <Skeleton className="h-4 w-3/4" />
           </CardHeader>
@@ -91,18 +70,6 @@ export function AccountPageClient({ userData }: AccountPageClientProps) {
           <AccountSkeleton />
         ) : (
           <>
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle>Profile</CardTitle>
-                <CardDescription>
-                  Update your personal information and profile picture.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AccountForm user={userData} />
-              </CardContent>
-            </Card>
-
             <Card className="border-destructive/20 shadow-sm">
               <CardHeader>
                 <CardTitle className="text-destructive flex items-center gap-2">
@@ -152,7 +119,6 @@ export function AccountPageClient({ userData }: AccountPageClientProps) {
               following information:
             </p>
             <ul className="list-disc pl-5 space-y-1 text-sm">
-              <li>Your full name</li>
               <li>
                 Email address:{" "}
                 <span className="font-medium">{userData?.email}</span>

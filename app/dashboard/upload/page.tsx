@@ -2,15 +2,16 @@
 
 import { useState } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { UploadCloud, Loader2, AlertCircle, Globe, Lock } from "lucide-react";
+import { UploadCloud, Loader2, AlertCircle, Globe, Bug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
+
+const CHUNK_SIZE = 3 * 1024 * 1024; // 3MB chunks for Vercel compatibility
 
 export default function ModelUpload() {
   const { user } = useAuth();
@@ -19,19 +20,20 @@ export default function ModelUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [isPublic, setIsPublic] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [currentChunk, setCurrentChunk] = useState(0);
+  const [totalChunks, setTotalChunks] = useState(0);
+  const [debugInfo, setDebugInfo] = useState<string>("");
 
   // File validation
   const validateFile = (selectedFile: File): string | null => {
-    const allowedTypes = [".glb", ".usdz", ".gltf"];
-    const fileExtension =
-      "." + selectedFile.name.split(".").pop()?.toLowerCase();
+    const allowedExtensions = ["glb", "usdz", "gltf"];
+    const fileExtension = selectedFile.name.split(".").pop()?.toLowerCase();
 
-    if (!allowedTypes.some((type) => fileExtension === type)) {
+    if (!fileExtension || !allowedExtensions.includes(fileExtension)) {
       return "Invalid file type. Please upload .glb, .usdz, or .gltf files only.";
     }
 
@@ -55,17 +57,21 @@ export default function ModelUpload() {
 
       setFile(selectedFile);
       setUploadError("");
+      setDebugInfo("");
 
       // Auto-generate name from filename if empty
       if (!name.trim()) {
         const baseName = selectedFile.name.replace(/\.[^/.]+$/, "");
         setName(baseName);
       }
+
+      // Calculate total chunks needed
+      const chunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
+      setTotalChunks(chunks);
     }
   };
 
-  // Direct client-side upload to Appwrite
-  const handleDirectUpload = async () => {
+  const uploadFile = async () => {
     if (!file || !name.trim()) {
       setUploadError("Please select a file and provide a name");
       return;
@@ -76,192 +82,136 @@ export default function ModelUpload() {
       return;
     }
 
-    // Use server upload for small files (under 4MB to avoid Vercel limits)
-    if (file.size < 4 * 1024 * 1024) {
-      return handleServerUpload();
-    }
-
     setIsUploading(true);
     setUploadError("");
     setUploadProgress(0);
+    setCurrentChunk(0);
+    setDebugInfo("");
 
     try {
-      console.log("Starting direct upload process...");
+      // Generate unique upload ID for chunked uploads
+      const uploadId = `upload_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+      const chunks = Math.ceil(file.size / CHUNK_SIZE);
 
-      // Step 1: Get upload URL and permissions from our API
-      const initResponse = await fetch("/api/models/direct-upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-          name,
-          description,
-          isPublic,
-        }),
-      });
+      console.log(
+        `Starting upload: ${file.name} (${formatFileSize(
+          file.size
+        )}) in ${chunks} chunk(s)`
+      );
+      setDebugInfo(
+        `Upload ID: ${uploadId}, Chunks: ${chunks}, User: ${user.id}`
+      );
 
-      if (!initResponse.ok) {
-        const errorData = await initResponse.json();
-        throw new Error(errorData.error || "Failed to initialize upload");
-      }
+      // Upload each chunk
+      for (let chunkIndex = 0; chunkIndex < chunks; chunkIndex++) {
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
 
-      const { fileId, bucketId, uploadUrl, documentId, projectId } =
-        await initResponse.json();
-      console.log("Upload initialized:", { fileId, bucketId, documentId });
+        const chunkFile = new File([chunk], file.name, { type: file.type });
 
-      setUploadProgress(10);
+        const formData = new FormData();
+        formData.append("file", chunkFile);
+        formData.append("name", name);
+        formData.append("description", description);
+        formData.append("isPublic", "true"); // Always public as requested
 
-      // Step 2: Upload directly to Appwrite
-      const formData = new FormData();
-      formData.append("fileId", fileId);
-      formData.append("file", file);
+        // Add chunking parameters
+        if (chunks > 1) {
+          formData.append("chunkIndex", chunkIndex.toString());
+          formData.append("totalChunks", chunks.toString());
+          formData.append("uploadId", uploadId);
+        }
 
-      console.log("Uploading to Appwrite...");
+        console.log(`Uploading chunk ${chunkIndex + 1}/${chunks}`);
+        setCurrentChunk(chunkIndex + 1);
 
-      const uploadResponse = await fetch(uploadUrl, {
-        method: "POST",
-        body: formData,
-        headers: {
-          "X-Appwrite-Project": projectId,
-        },
-      });
+        const response = await fetch("/api/models/upload", {
+          method: "POST",
+          body: formData,
+        });
 
-      if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        console.error("Appwrite upload failed:", errorText);
-        throw new Error(
-          `Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`
+        // Get detailed error information
+        const responseText = await response.text();
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (e) {
+          console.error("Response is not JSON:", responseText);
+          throw new Error(
+            `Server returned non-JSON response: ${responseText.substring(
+              0,
+              200
+            )}`
+          );
+        }
+
+        if (!response.ok) {
+          console.error("Server error details:", result);
+          setDebugInfo(`Server Error: ${JSON.stringify(result, null, 2)}`);
+          throw new Error(
+            result.error ||
+              `Failed to upload chunk ${chunkIndex + 1}: ${response.status} ${
+                response.statusText
+              }`
+          );
+        }
+
+        // Update progress
+        const progress = Math.round(((chunkIndex + 1) / chunks) * 100);
+        setUploadProgress(progress);
+
+        console.log(
+          `Chunk ${chunkIndex + 1}/${chunks} uploaded successfully`,
+          result
         );
+
+        // If this was the last chunk and it's completed
+        if (result.completed) {
+          console.log("Upload completed successfully!", result);
+          setUploadSuccess(true);
+          setDebugInfo(
+            `Success! Model ID: ${result.model?.$id}, File ID: ${result.file?.$id}`
+          );
+
+          // Reset form after success
+          setTimeout(() => {
+            resetForm();
+            router.push("/dashboard/models");
+          }, 3000);
+
+          break;
+        }
       }
-
-      setUploadProgress(90);
-
-      // Step 3: Notify our API that upload is complete
-      const completeResponse = await fetch("/api/models/upload-complete", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          documentId,
-          fileId,
-          success: true,
-        }),
-      });
-
-      if (!completeResponse.ok) {
-        const errorData = await completeResponse.json();
-        throw new Error(errorData.error || "Failed to complete upload");
-      }
-
-      setUploadProgress(100);
-      setUploadSuccess(true);
-
-      console.log("Upload completed successfully!");
-
-      // Reset form after success
-      setTimeout(() => {
-        setFile(null);
-        setName("");
-        setDescription("");
-        setIsPublic(false);
-        setUploadSuccess(false);
-        setUploadProgress(0);
-        router.push("/dashboard/models");
-      }, 2000);
     } catch (error) {
       console.error("Upload error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Upload failed";
+      setUploadError(errorMessage);
 
+      // Add debug info for the error
       if (error instanceof Error) {
-        if (
-          error.message.includes("413") ||
-          error.message.includes("file_size_exceeded")
-        ) {
-          setUploadError("File size exceeds the maximum allowed limit.");
-        } else if (error.message.includes("storage_file_type_unsupported")) {
-          setUploadError(
-            "File type not supported. Please upload .glb, .usdz, or .gltf files only."
-          );
-        } else if (
-          error.message.includes("NetworkError") ||
-          error.message.includes("fetch")
-        ) {
-          setUploadError(
-            "Network error. Please check your connection and try again."
-          );
-        } else {
-          setUploadError(`Upload failed: ${error.message}`);
-        }
-      } else {
-        setUploadError("An unexpected error occurred during upload.");
+        setDebugInfo(
+          `Error: ${error.message}\nStack: ${error.stack?.substring(0, 500)}`
+        );
       }
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Server-side upload for small files (< 4MB)
-  const handleServerUpload = async () => {
-    if (!file || !name.trim()) {
-      setUploadError("Please select a file and provide a name");
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadError("");
+  const resetForm = () => {
+    setFile(null);
+    setName("");
+    setDescription("");
+    setUploadSuccess(false);
     setUploadProgress(0);
-
-    try {
-      // Create form data
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("name", name);
-      formData.append("description", description);
-      formData.append("isPublic", isPublic.toString());
-
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => (prev < 90 ? prev + 10 : prev));
-      }, 200);
-
-      console.log("Starting server-side upload for small file...");
-
-      const response = await fetch("/api/models/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
-        );
-      }
-
-      const result = await response.json();
-      console.log("Server upload successful:", result);
-
-      setUploadSuccess(true);
-
-      // Reset form after success
-      setTimeout(() => {
-        setFile(null);
-        setName("");
-        setDescription("");
-        setIsPublic(false);
-        setUploadSuccess(false);
-        setUploadProgress(0);
-        router.push("/dashboard/models");
-      }, 2000);
-    } catch (error) {
-      console.error("Server upload error:", error);
-      setUploadError(error instanceof Error ? error.message : "Upload failed");
-    } finally {
-      setIsUploading(false);
-    }
+    setCurrentChunk(0);
+    setTotalChunks(0);
+    setUploadError("");
+    setDebugInfo("");
   };
 
   // Format file size for display
@@ -271,13 +221,6 @@ export default function ModelUpload() {
     const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  // Determine upload method based on file size
-  const getUploadMethod = () => {
-    if (!file) return "No file selected";
-    if (file.size < 4 * 1024 * 1024) return "Server Upload (Faster)";
-    return "Direct Upload (Large Files)";
   };
 
   return (
@@ -290,6 +233,23 @@ export default function ModelUpload() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Debug Info */}
+          {debugInfo && (
+            <Alert>
+              <Bug className="h-4 w-4" />
+              <AlertDescription>
+                <details>
+                  <summary className="cursor-pointer font-medium">
+                    Debug Information
+                  </summary>
+                  <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto max-h-32">
+                    {debugInfo}
+                  </pre>
+                </details>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* File Upload */}
           <div className="space-y-2">
             <Label htmlFor="file">Select Model File</Label>
@@ -308,7 +268,11 @@ export default function ModelUpload() {
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-sm font-medium">{file.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {formatFileSize(file.size)} • {getUploadMethod()}
+                  {formatFileSize(file.size)} •{" "}
+                  {totalChunks > 1 ? `${totalChunks} chunks` : "Single upload"}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Type: {file.type} • Extension: .{file.name.split(".").pop()}
                 </p>
               </div>
             )}
@@ -340,30 +304,16 @@ export default function ModelUpload() {
             />
           </div>
 
-          {/* Public Toggle */}
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="flex items-center gap-3">
-              {isPublic ? (
-                <Globe className="h-5 w-5 text-blue-500" />
-              ) : (
-                <Lock className="h-5 w-5 text-gray-500" />
-              )}
-              <div>
-                <p className="font-medium">
-                  {isPublic ? "Public Model" : "Private Model"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {isPublic
-                    ? "Anyone can view this model"
-                    : "Only you can view this model"}
-                </p>
-              </div>
+          {/* Public Notice */}
+          <div className="flex items-center gap-3 p-4 border rounded-lg bg-blue-50">
+            <Globe className="h-5 w-5 text-blue-500" />
+            <div>
+              <p className="font-medium text-blue-900">Public Model</p>
+              <p className="text-sm text-blue-700">
+                All uploaded models are public and viewable by anyone. Only you
+                can delete or edit your models.
+              </p>
             </div>
-            <Switch
-              checked={isPublic}
-              onCheckedChange={setIsPublic}
-              disabled={isUploading}
-            />
           </div>
 
           {/* Upload Progress */}
@@ -371,9 +321,9 @@ export default function ModelUpload() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">
-                  {file && file.size >= 4 * 1024 * 1024
-                    ? "Uploading directly..."
-                    : "Processing..."}
+                  {totalChunks > 1
+                    ? `Uploading chunk ${currentChunk}/${totalChunks}...`
+                    : "Uploading..."}
                 </span>
                 <span className="text-sm text-muted-foreground">
                   {uploadProgress}%
@@ -385,6 +335,11 @@ export default function ModelUpload() {
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
+              {totalChunks > 1 && (
+                <p className="text-xs text-muted-foreground text-center">
+                  Using 3MB chunks to comply with Vercel limits
+                </p>
+              )}
             </div>
           )}
 
@@ -392,7 +347,12 @@ export default function ModelUpload() {
           {uploadError && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{uploadError}</AlertDescription>
+              <AlertDescription>
+                <div>
+                  <strong>Upload Error:</strong> {uploadError}
+                </div>
+                <details className="mt-2"></details>
+              </AlertDescription>
             </Alert>
           )}
 
@@ -401,14 +361,15 @@ export default function ModelUpload() {
             <Alert className="border-green-200 bg-green-50">
               <AlertCircle className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800">
-                Model uploaded successfully! Redirecting...
+                Model uploaded successfully! Redirecting to your models in 3
+                seconds...
               </AlertDescription>
             </Alert>
           )}
 
           {/* Upload Button */}
           <Button
-            onClick={handleDirectUpload}
+            onClick={uploadFile}
             disabled={!file || !name.trim() || isUploading}
             className="w-full"
             size="lg"
@@ -416,7 +377,9 @@ export default function ModelUpload() {
             {isUploading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Uploading... ({uploadProgress}%)
+                {totalChunks > 1
+                  ? `Uploading chunk ${currentChunk}/${totalChunks}... (${uploadProgress}%)`
+                  : `Uploading... (${uploadProgress}%)`}
               </>
             ) : (
               <>
@@ -425,13 +388,6 @@ export default function ModelUpload() {
               </>
             )}
           </Button>
-
-          <div className="text-xs text-muted-foreground text-center space-y-1">
-            <p>✅ Automatic upload method selection based on file size</p>
-            <p>✅ Small files (&lt;4MB): Fast server upload</p>
-            <p>✅ Large files (4MB-100MB): Direct client upload</p>
-            <p>✅ Works on all Vercel plans</p>
-          </div>
         </CardContent>
       </Card>
     </div>

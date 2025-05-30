@@ -1,3 +1,4 @@
+// This is used for the delete user email template
 export type UserData = {
   id: string;
   name: string;

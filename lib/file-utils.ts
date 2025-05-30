@@ -1,3 +1,4 @@
+//Depricated
 import { storage, BUCKET_ID } from "@/lib/appwrite-server";
 
 export const getFileUrl = (fileId: string): string => {
