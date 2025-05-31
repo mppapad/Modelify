@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,19 +62,34 @@ interface Model {
   createdAt: string;
 }
 
-// Loading Skeleton
+// Loading Skeleton with proper accessibility
 const ModelRowSkeleton = () => (
   <Card className="mb-4">
     <CardContent className="p-4">
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+        <div
+          className="w-12 h-12 bg-gray-200 rounded-lg animate-pulse"
+          aria-hidden="true"
+        ></div>
         <div className="flex-1 space-y-2">
-          <div className="h-4 bg-gray-200 rounded animate-pulse w-48"></div>
-          <div className="h-3 bg-gray-200 rounded animate-pulse w-32"></div>
+          <div
+            className="h-4 bg-gray-200 rounded animate-pulse w-48"
+            aria-hidden="true"
+          ></div>
+          <div
+            className="h-3 bg-gray-200 rounded animate-pulse w-32"
+            aria-hidden="true"
+          ></div>
         </div>
         <div className="flex gap-2">
-          <div className="h-8 bg-gray-200 rounded animate-pulse w-20"></div>
-          <div className="h-8 bg-gray-200 rounded animate-pulse w-16"></div>
+          <div
+            className="h-8 bg-gray-200 rounded animate-pulse w-20"
+            aria-hidden="true"
+          ></div>
+          <div
+            className="h-8 bg-gray-200 rounded animate-pulse w-16"
+            aria-hidden="true"
+          ></div>
         </div>
       </div>
     </CardContent>
@@ -90,6 +104,14 @@ export default function SimpleModelsPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [copyingId, setCopyingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Improved edit state management
+  const [editingModel, setEditingModel] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    description: "",
+    isPublic: false,
+  });
   const [updatingModel, setUpdatingModel] = useState(false);
 
   // Delete confirmation dialog
@@ -98,14 +120,16 @@ export default function SimpleModelsPage() {
 
   // Edit modal
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingModel, setEditingModel] = useState<Model | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editIsPublic, setEditIsPublic] = useState(false);
 
   // Embed modal
   const [embedDialogOpen, setEmbedDialogOpen] = useState(false);
   const [embedModel, setEmbedModel] = useState<Model | null>(null);
+
+  // Add this state near the other useState declarations
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // Add error state
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchModels();
@@ -123,6 +147,7 @@ export default function SimpleModelsPage() {
   const fetchModels = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await fetch("/api/models/my-models");
 
       if (!response.ok) {
@@ -130,85 +155,171 @@ export default function SimpleModelsPage() {
       }
 
       const data = await response.json();
+      console.log("Fetched models data:", data);
+      console.log("First model structure:", data.models?.[0]);
+      console.log("First model ID:", data.models?.[0]?.$id);
+
       setModels(data.models || []);
     } catch (error) {
       console.error("Error fetching models:", error);
+      setError("Failed to fetch models");
       toast.error("Failed to fetch models");
     } finally {
       setLoading(false);
     }
   };
 
-  // Generate file URL
+  // Generate file URL for downloading
   const getFileUrl = (fileId: string) => {
     const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
     const bucketId = process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID;
     const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
 
-    return `${endpoint}/storage/buckets/${bucketId}/files/${fileId}/download?project=${projectId}&mode=admin`;
+    return `${endpoint}/storage/buckets/${bucketId}/files/${fileId}/download?project=${projectId}`;
   };
 
-  // Helper function to get model ID
-  const getModelId = (model: Model) => model.$id;
+  // Generate file URL for viewing/embedding (different from download)
+  const getFileViewUrl = (fileId: string) => {
+    const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
+    const bucketId = process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID;
+    const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
 
-  // Download file function
-  const downloadModel = async (model: Model) => {
+    return `${endpoint}/storage/buckets/${bucketId}/files/${fileId}/view?project=${projectId}`;
+  };
+
+  // Improved update model function
+  const updateModel = async (
+    modelId: string,
+    updateData: {
+      name?: string;
+      description?: string;
+      isPublic?: boolean;
+    }
+  ) => {
     try {
-      setDownloadingId(model.$id);
+      setUpdatingModel(true);
+      setError(null);
 
-      const fileUrl = getFileUrl(model.fileId);
+      console.log(`PATCH /api/models/update/${modelId}`);
+      console.log("Update data:", updateData);
 
-      // Create a temporary link and trigger download
-      const link = document.createElement("a");
-      link.href = fileUrl;
-      link.download = model.fileName;
-      link.target = "_blank";
+      // Ensure the modelId is properly encoded in the URL
+      const encodedModelId = encodeURIComponent(modelId);
 
-      // Append to body, click, and remove
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const response = await fetch(`/api/models/update/${encodedModelId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updateData),
+        // Add credentials to ensure cookies are sent
+        credentials: "include",
+      });
 
-      toast.success("Download started!");
+      console.log("Response status:", response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Error response:", errorData);
+        throw new Error(errorData.error || "Failed to update model");
+      }
+
+      const result = await response.json();
+      console.log("Update successful:", result);
+
+      // Update the local state with the new data
+      const updatedModelData = result.model || result;
+      setModels((prevModels) =>
+        prevModels.map((model) =>
+          model.$id === modelId ? { ...model, ...updatedModelData } : model
+        )
+      );
+
+      // Close the edit form
+      closeEditModal();
+
+      toast.success(result.message || "Model updated successfully.");
+
+      return result;
     } catch (error) {
-      console.error("Download failed:", error);
-      toast.error("Failed to download file");
+      console.error("Failed to update model:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to update model"
+      );
+
+      // More specific error messages
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        toast.error("Network error - please check your connection");
+      } else {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to update model. Please try again."
+        );
+      }
+      throw error;
     } finally {
-      setDownloadingId(null);
+      setUpdatingModel(false);
     }
   };
 
-  // Copy URL to clipboard
-  const copyFileUrl = async (model: Model) => {
-    try {
-      setCopyingId(model.$id);
-      const fileUrl = getFileUrl(model.fileId);
+  // Handler for the save button
+  const handleSaveChanges = async () => {
+    if (!editingModel) return;
 
-      await navigator.clipboard.writeText(fileUrl);
-      toast.success("File URL copied to clipboard!");
+    try {
+      setError(null);
+      // Only send non-empty values
+      const updateData: any = {};
+
+      if (editForm.name.trim()) {
+        updateData.name = editForm.name.trim();
+      }
+
+      if (editForm.description.trim()) {
+        updateData.description = editForm.description.trim();
+      }
+
+      // Always include isPublic as it's a boolean
+      updateData.isPublic = editForm.isPublic;
+
+      await updateModel(editingModel, updateData);
     } catch (error) {
-      console.error("Failed to copy URL:", error);
-      toast.error("Failed to copy URL");
-    } finally {
-      setCopyingId(null);
+      console.error("Update failed:", error);
+      setError(error instanceof Error ? error.message : "Update failed");
     }
   };
 
-  // Delete model function
-  const deleteModel = async (modelId: string) => {
-    if (!modelId || modelId === "undefined") {
-      console.error("Invalid model ID:", modelId);
-      toast.error("Error: Invalid model ID");
+  // Function to start editing a model
+  const startEditing = (model: Model) => {
+    setEditingModel(model.$id);
+    setEditForm({
+      name: model.name || "",
+      description: model.description || "",
+      isPublic: model.isPublic || false,
+    });
+    setEditDialogOpen(true);
+  };
+
+  const deleteModel = async (documentId: string) => {
+    if (!documentId || documentId === "undefined") {
+      console.error("Invalid document ID:", documentId);
+      toast.error("Error: Invalid document ID");
       return;
     }
 
-    console.log("Deleting model with ID:", modelId);
+    console.log("Deleting model with document ID:", documentId);
 
     try {
-      setDeletingId(modelId);
+      setDeletingId(documentId);
+      setError(null);
 
-      const response = await fetch(`/api/models/delete/${modelId}`, {
+      // Ensure the documentId is properly encoded in the URL
+      const encodedDocumentId = encodeURIComponent(documentId);
+
+      const response = await fetch(`/api/models/delete/${encodedDocumentId}`, {
         method: "DELETE",
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -218,12 +329,13 @@ export default function SimpleModelsPage() {
 
       const result = await response.json();
 
-      setModels((prev) =>
-        prev.filter((model) => getModelId(model) !== modelId)
-      );
+      setModels((prev) => prev.filter((model) => model.$id !== documentId));
       toast.success(result.message || "Model deleted successfully.");
     } catch (error) {
       console.error("Error deleting model:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to delete model"
+      );
       toast.error(
         error instanceof Error
           ? error.message
@@ -234,77 +346,104 @@ export default function SimpleModelsPage() {
     }
   };
 
-  // Update model function
-  const updateModel = async () => {
-    if (!editingModel) return;
-
-    const modelId = getModelId(editingModel);
-    if (!modelId) {
-      toast.error("Invalid model ID");
-      return;
-    }
-
-    try {
-      setUpdatingModel(true);
-      const response = await fetch(`/api/models/update/${modelId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: editName,
-          description: editDescription,
-          isPublic: editIsPublic,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to update model");
-      }
-
-      const updatedModel = await response.json();
-
-      setModels(
-        models.map((model) =>
-          getModelId(model) === modelId ? { ...model, ...updatedModel } : model
-        )
-      );
-
-      closeEditModal();
-      toast.success("Model updated successfully.");
-    } catch (error) {
-      console.error("Failed to update model:", error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to update model. Please try again."
-      );
-    } finally {
-      setUpdatingModel(false);
+  const confirmDelete = () => {
+    if (modelToDelete) {
+      deleteModel(modelToDelete.$id);
+      closeDeleteDialog();
     }
   };
 
-  // Modal handlers
+  // Improved download function with proper authentication - FIXED URL
+  const downloadModel = async (model: Model) => {
+    try {
+      setDownloadingId(model.$id);
+      setError(null);
+
+      console.log("Starting download for model:", model.name);
+
+      // Use the corrected API route (downloads plural)
+      const response = await fetch(
+        `/api/models/downloads/${encodeURIComponent(model.fileId)}`,
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ error: "Download failed" }));
+        throw new Error(errorData.error || "Failed to download file");
+      }
+
+      // Get the blob from the response
+      const blob = await response.blob();
+
+      // Create a download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = model.fileName;
+      link.style.display = "none";
+
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success(`Download started: ${model.fileName}`);
+    } catch (error) {
+      console.error("Download failed:", error);
+      setError("Failed to download file");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to download file"
+      );
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const copyFileUrl = async (model: Model) => {
+    try {
+      setCopyingId(model.$id);
+      setError(null);
+      const fileUrl = getFileViewUrl(model.fileId); // Use view URL for copying
+
+      await navigator.clipboard.writeText(fileUrl);
+      toast.success("File URL copied to clipboard!");
+    } catch (error) {
+      console.error("Failed to copy URL:", error);
+      setError("Failed to copy URL");
+      toast.error("Failed to copy URL");
+    } finally {
+      setCopyingId(null);
+    }
+  };
+
+  // Modal handlers - updated to close dropdown first
   const openEditModal = (model: Model) => {
-    setEditingModel(model);
-    setEditName(model.name);
-    setEditDescription(model.description || "");
-    setEditIsPublic(model.isPublic || false);
-    setEditDialogOpen(true);
+    setOpenDropdownId(null); // Close dropdown first
+    setTimeout(() => {
+      startEditing(model);
+    }, 100); // Small delay to ensure dropdown closes
   };
 
   const closeEditModal = () => {
     setEditDialogOpen(false);
     setEditingModel(null);
-    setEditName("");
-    setEditDescription("");
-    setEditIsPublic(false);
+    setEditForm({ name: "", description: "", isPublic: false });
   };
 
   const openDeleteDialog = (model: Model) => {
-    setModelToDelete(model);
-    setDeleteDialogOpen(true);
+    setOpenDropdownId(null); // Close dropdown first
+    setTimeout(() => {
+      setModelToDelete(model);
+      setDeleteDialogOpen(true);
+    }, 100);
   };
 
   const closeDeleteDialog = () => {
@@ -312,16 +451,12 @@ export default function SimpleModelsPage() {
     setModelToDelete(null);
   };
 
-  const confirmDelete = () => {
-    if (modelToDelete) {
-      deleteModel(getModelId(modelToDelete));
-      closeDeleteDialog();
-    }
-  };
-
   const openEmbedModal = (model: Model) => {
-    setEmbedModel(model);
-    setEmbedDialogOpen(true);
+    setOpenDropdownId(null); // Close dropdown first
+    setTimeout(() => {
+      setEmbedModel(model);
+      setEmbedDialogOpen(true);
+    }, 100);
   };
 
   const closeEmbedModal = () => {
@@ -340,7 +475,7 @@ export default function SimpleModelsPage() {
 
   // Generate embed code
   const generateEmbedCode = (model: Model) => {
-    const fileUrl = getFileUrl(model.fileId);
+    const fileUrl = getFileViewUrl(model.fileId); // Use view URL for embedding
     const extension = getFileExtension(model.fileName);
 
     if (extension === "glb" || extension === "gltf") {
@@ -348,7 +483,9 @@ export default function SimpleModelsPage() {
 <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>`;
     } else {
       return `<!-- Embed code for ${extension.toUpperCase()} files -->
-<iframe src="${fileUrl}" width="800" height="600" frameborder="0"></iframe>`;
+<iframe src="${fileUrl}" width="800" height="600" frameborder="0" title="${
+        model.name
+      }"></iframe>`;
     }
   };
 
@@ -358,7 +495,8 @@ export default function SimpleModelsPage() {
       id: model.$id,
       name: model.name,
       fileName: model.fileName,
-      fileUrl: getFileUrl(model.fileId),
+      fileUrl: getFileViewUrl(model.fileId), // Use view URL for export
+      downloadUrl: getFileUrl(model.fileId), // Include both URLs
       createdAt: model.createdAt,
     }));
 
@@ -383,7 +521,9 @@ export default function SimpleModelsPage() {
     const k = 1024;
     const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+    return (
+      Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+    );
   };
 
   const getFileExtension = (fileName: string): string => {
@@ -404,93 +544,129 @@ export default function SimpleModelsPage() {
     }
   };
 
+  // Add this useEffect after the existing ones
+  useEffect(() => {
+    if (editDialogOpen || embedDialogOpen || deleteDialogOpen) {
+      setOpenDropdownId(null);
+    }
+  }, [editDialogOpen, embedDialogOpen, deleteDialogOpen]);
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">3D Models</h1>
-          <p className="text-muted-foreground">
-            Download and manage your files
-          </p>
+      <header>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">3D Models</h1>
+            <p className="text-muted-foreground">
+              Download and manage your files
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={fetchModels}
+              disabled={loading}
+              variant="outline"
+              size="sm"
+              aria-label="Refresh models list"
+            >
+              <RefreshCcw className="w-4 h-4 mr-2" aria-hidden="true" />
+              Refresh
+            </Button>
+            <Button
+              onClick={exportFileUrls}
+              disabled={models.length === 0}
+              variant="outline"
+              size="sm"
+              aria-label="Export all file URLs as JSON"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" aria-hidden="true" />
+              Export URLs
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={fetchModels}
-            disabled={loading}
-            variant="outline"
-            size="sm"
-          >
-            <RefreshCcw className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
-          <Button
-            onClick={exportFileUrls}
-            disabled={models.length === 0}
-            variant="outline"
-            size="sm"
-          >
-            <ExternalLink className="w-4 h-4 mr-2" />
-            Export URLs
-          </Button>
+      </header>
+
+      {/* Error display */}
+      {error && (
+        <div
+          className="bg-red-50 border border-red-200 text-red-800 rounded-md p-4"
+          role="alert"
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-medium">Error:</span>
+            <span>{error}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm font-medium text-muted-foreground">
-              Total Models
-            </div>
-            <div className="text-2xl font-bold">{models.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm font-medium text-muted-foreground">
-              GLB Files
-            </div>
-            <div className="text-2xl font-bold">
-              {
-                models.filter((m) => getFileExtension(m.fileName) === "glb")
-                  .length
-              }
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm font-medium text-muted-foreground">
-              GLTF Files
-            </div>
-            <div className="text-2xl font-bold">
-              {
-                models.filter((m) => getFileExtension(m.fileName) === "gltf")
-                  .length
-              }
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm font-medium text-muted-foreground">
-              USDZ Files
-            </div>
-            <div className="text-2xl font-bold">
-              {
-                models.filter((m) => getFileExtension(m.fileName) === "usdz")
-                  .length
-              }
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <section aria-labelledby="stats-heading">
+        <h2 id="stats-heading" className="sr-only">
+          Model Statistics
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-muted-foreground">
+                Total Models
+              </div>
+              <div className="text-2xl font-bold">{models.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-muted-foreground">
+                GLB Files
+              </div>
+              <div className="text-2xl font-bold">
+                {
+                  models.filter((m) => getFileExtension(m.fileName) === "glb")
+                    .length
+                }
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-muted-foreground">
+                GLTF Files
+              </div>
+              <div className="text-2xl font-bold">
+                {
+                  models.filter((m) => getFileExtension(m.fileName) === "gltf")
+                    .length
+                }
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-muted-foreground">
+                USDZ Files
+              </div>
+              <div className="text-2xl font-bold">
+                {
+                  models.filter((m) => getFileExtension(m.fileName) === "usdz")
+                    .length
+                }
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+        <label htmlFor="search-models" className="sr-only">
+          Search models
+        </label>
+        <Search
+          className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4"
+          aria-hidden="true"
+        />
         <Input
+          id="search-models"
           placeholder="Search models..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -498,124 +674,195 @@ export default function SimpleModelsPage() {
           disabled={loading}
         />
       </div>
+
       {/* Public Notice */}
-      <div className="flex items-center gap-3 p-4 border rounded-lg bg-red-50">
-        <MessageCircleWarning className="h-5 w-5 text-red-800" />
+      <div
+        className="flex items-center gap-3 p-4 border rounded-lg bg-blue-50"
+        role="status"
+        aria-live="polite"
+      >
+        <MessageCircleWarning
+          className="h-5 w-5 text-blue-800"
+          aria-hidden="true"
+        />
         <div>
-          <p className="font-medium text-red-800 ">Warning</p>
-          <p className="text-sm text-red-700 ">
-            Edit, embed options are broken, DO NOT USE!
+          <p className="font-medium text-blue-800">Fixed</p>
+          <p className="text-sm text-blue-700">
+            Edit, Download, Delete should work now! Embed is still in progress.
           </p>
         </div>
       </div>
+
       {/* Models List */}
-      <div className="space-y-4">
-        {loading ? (
-          Array.from({ length: 3 }).map((_, index) => (
-            <ModelRowSkeleton key={index} />
-          ))
-        ) : filteredModels.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-muted-foreground">
-              {searchTerm ? "No models match your search" : "No models found"}
+      <main>
+        <h2 className="sr-only">Models List</h2>
+        <div className="space-y-4">
+          {loading ? (
+            <div role="status" aria-live="polite" aria-label="Loading models">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <ModelRowSkeleton key={index} />
+              ))}
             </div>
-          </div>
-        ) : (
-          filteredModels.map((model) => (
-            <Card key={model.$id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  {/* File Icon */}
-                  <div
-                    className={`w-12 h-12 rounded-lg flex items-center justify-center ${getFileTypeColor(
-                      model.fileName
-                    )}`}
-                  >
-                    <FileText className="w-6 h-6" />
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold truncate">{model.name}</h3>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {model.fileName} • {formatFileSize(model.fileSize)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(model.createdAt), "MMM d, yyyy")}
-                    </p>
-                  </div>
-
-                  {/* File Type Badge */}
-                  <Badge className={getFileTypeColor(model.fileName)}>
-                    {getFileExtension(model.fileName).toUpperCase()}
-                  </Badge>
-
-                  {/* Actions */}
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => copyFileUrl(model)}
-                      disabled={copyingId === model.$id}
+          ) : filteredModels.length === 0 ? (
+            <div className="text-center py-12" role="status">
+              <div className="text-muted-foreground">
+                {searchTerm ? "No models match your search" : "No models found"}
+              </div>
+            </div>
+          ) : (
+            filteredModels.map((model) => (
+              <Card
+                key={model.$id}
+                className="hover:shadow-md transition-shadow"
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    {/* File Icon */}
+                    <div
+                      className={`w-12 h-12 rounded-lg flex items-center justify-center ${getFileTypeColor(
+                        model.fileName
+                      )}`}
+                      aria-hidden="true"
                     >
-                      {copyingId === model.$id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                    </Button>
+                      <FileText className="w-6 h-6" />
+                    </div>
 
-                    <Button
-                      size="sm"
-                      onClick={() => downloadModel(model)}
-                      disabled={downloadingId === model.$id}
-                    >
-                      {downloadingId === model.$id ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Downloading...
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-4 h-4 mr-2" />
-                          Download
-                        </>
-                      )}
-                    </Button>
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold truncate">{model.name}</h3>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {model.fileName} • {formatFileSize(model.fileSize)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        <time dateTime={model.createdAt}>
+                          {new Date(model.createdAt).toLocaleDateString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            }
+                          )}
+                        </time>
+                      </p>
+                    </div>
 
-                    {/* Three Dots Menu */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="sm" variant="outline">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEditModal(model)}>
-                          <Edit className="w-4 h-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openEmbedModal(model)}>
-                          <Code className="w-4 h-4 mr-2" />
-                          Embed
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => openDeleteDialog(model)}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {/* File Type Badge */}
+                    <Badge className={getFileTypeColor(model.fileName)}>
+                      {getFileExtension(model.fileName).toUpperCase()}
+                    </Badge>
+
+                    {/* Actions */}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => copyFileUrl(model)}
+                        disabled={copyingId === model.$id}
+                        aria-label={`Copy file URL for ${model.name}`}
+                      >
+                        {copyingId === model.$id ? (
+                          <Loader2
+                            className="w-4 h-4 animate-spin"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <Copy className="w-4 h-4" aria-hidden="true" />
+                        )}
+                        <span className="sr-only">Copy URL</span>
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        onClick={() => downloadModel(model)}
+                        disabled={downloadingId === model.$id}
+                        aria-label={`Download ${model.name}`}
+                      >
+                        {downloadingId === model.$id ? (
+                          <>
+                            <Loader2
+                              className="w-4 h-4 mr-2 animate-spin"
+                              aria-hidden="true"
+                            />
+                            Downloading...
+                          </>
+                        ) : (
+                          <>
+                            <Download
+                              className="w-4 h-4 mr-2"
+                              aria-hidden="true"
+                            />
+                            Download
+                          </>
+                        )}
+                      </Button>
+
+                      {/* Three Dots Menu - Updated with controlled state */}
+                      <DropdownMenu
+                        open={openDropdownId === model.$id}
+                        onOpenChange={(open) => {
+                          if (open) {
+                            setOpenDropdownId(model.$id);
+                          } else {
+                            setOpenDropdownId(null);
+                          }
+                        }}
+                      >
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            aria-label={`More actions for ${model.name}`}
+                          >
+                            <MoreVertical
+                              className="w-4 h-4"
+                              aria-hidden="true"
+                            />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.preventDefault();
+                              openEditModal(model);
+                            }}
+                          >
+                            <Edit className="w-4 h-4 mr-2" aria-hidden="true" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.preventDefault();
+                              openEmbedModal(model);
+                            }}
+                          >
+                            <Code className="w-4 h-4 mr-2" aria-hidden="true" />
+                            Embed
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.preventDefault();
+                              openDeleteDialog(model);
+                            }}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            <Trash2
+                              className="w-4 h-4 mr-2"
+                              aria-hidden="true"
+                            />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      </main>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -638,7 +885,10 @@ export default function SimpleModelsPage() {
             >
               {deletingId === modelToDelete?.$id ? (
                 <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2
+                    className="w-4 h-4 mr-2 animate-spin"
+                    aria-hidden="true"
+                  />
                   Deleting...
                 </>
               ) : (
@@ -660,35 +910,44 @@ export default function SimpleModelsPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
+              <Label htmlFor="edit-name" className="text-right">
                 Name
               </Label>
               <Input
-                id="name"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
+                id="edit-name"
+                value={editForm.name}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, name: e.target.value }))
+                }
                 className="col-span-3"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="description" className="text-right">
+              <Label htmlFor="edit-description" className="text-right">
                 Description
               </Label>
               <Textarea
-                id="description"
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
+                id="edit-description"
+                value={editForm.description}
+                onChange={(e) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
+                }
                 className="col-span-3"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="public" className="text-right">
+              <Label htmlFor="edit-public" className="text-right">
                 Public
               </Label>
               <Switch
-                id="public"
-                checked={editIsPublic}
-                onCheckedChange={setEditIsPublic}
+                id="edit-public"
+                checked={editForm.isPublic}
+                onCheckedChange={(checked) =>
+                  setEditForm((prev) => ({ ...prev, isPublic: checked }))
+                }
               />
             </div>
           </div>
@@ -696,10 +955,13 @@ export default function SimpleModelsPage() {
             <Button variant="outline" onClick={closeEditModal}>
               Cancel
             </Button>
-            <Button onClick={updateModel} disabled={updatingModel}>
+            <Button onClick={handleSaveChanges} disabled={updatingModel}>
               {updatingModel ? (
                 <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2
+                    className="w-4 h-4 mr-2 animate-spin"
+                    aria-hidden="true"
+                  />
                   Saving...
                 </>
               ) : (
@@ -710,34 +972,46 @@ export default function SimpleModelsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Embed Code Dialog */}
+      {/* Embed Modal */}
       <Dialog open={embedDialogOpen} onOpenChange={setEmbedDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Embed Code</DialogTitle>
             <DialogDescription>
-              Copy this code to embed your 3D model on your website.
+              Copy the code below to embed this model in your website.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {embedModel && (
-              <div className="relative">
-                <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-                  <code>{generateEmbedCode(embedModel)}</code>
-                </pre>
+              <div>
+                <Label htmlFor="embed-code" className="text-sm font-medium">
+                  Embed Code:
+                </Label>
+                <div className="mt-2 p-3 bg-gray-100 rounded-md">
+                  <code
+                    id="embed-code"
+                    className="text-sm whitespace-pre-wrap"
+                    tabIndex={0}
+                  >
+                    {generateEmbedCode(embedModel)}
+                  </code>
+                </div>
                 <Button
+                  className="mt-2"
                   size="sm"
-                  variant="outline"
-                  className="absolute top-2 right-2"
                   onClick={() => copyEmbedCode(generateEmbedCode(embedModel))}
+                  aria-label="Copy embed code to clipboard"
                 >
-                  <Copy className="w-4 h-4" />
+                  <Copy className="w-4 h-4 mr-2" aria-hidden="true" />
+                  Copy Code
                 </Button>
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button onClick={closeEmbedModal}>Close</Button>
+            <Button variant="outline" onClick={closeEmbedModal}>
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

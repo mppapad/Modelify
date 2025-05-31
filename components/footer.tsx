@@ -1,4 +1,4 @@
-
+// Not used for now.
 export default function Footer() {
   return (
     <footer className="bg-gray-50 rounded-lg shadow m-4 dark:bg-[#181818] h-fit w-fit items-center justify-between flex ">

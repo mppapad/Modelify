@@ -1,4 +1,3 @@
-// Appwrite.ts does pretty much the same thing, but so much more. Need to check but probably deprecated.
 import { Client, Databases, Storage, Users } from "node-appwrite";
 
 const client = new Client();

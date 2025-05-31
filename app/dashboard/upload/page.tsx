@@ -26,7 +26,6 @@ export default function ModelUpload() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [currentChunk, setCurrentChunk] = useState(0);
   const [totalChunks, setTotalChunks] = useState(0);
-  const [debugInfo, setDebugInfo] = useState<string>("");
 
   // File validation
   const validateFile = (selectedFile: File): string | null => {
@@ -57,7 +56,6 @@ export default function ModelUpload() {
 
       setFile(selectedFile);
       setUploadError("");
-      setDebugInfo("");
 
       // Auto-generate name from filename if empty
       if (!name.trim()) {
@@ -86,8 +84,6 @@ export default function ModelUpload() {
     setUploadError("");
     setUploadProgress(0);
     setCurrentChunk(0);
-    setDebugInfo("");
-
     try {
       // Generate unique upload ID for chunked uploads
       const uploadId = `upload_${Date.now()}_${Math.random()
@@ -99,9 +95,6 @@ export default function ModelUpload() {
         `Starting upload: ${file.name} (${formatFileSize(
           file.size
         )}) in ${chunks} chunk(s)`
-      );
-      setDebugInfo(
-        `Upload ID: ${uploadId}, Chunks: ${chunks}, User: ${user.id}`
       );
 
       // Upload each chunk
@@ -150,7 +143,6 @@ export default function ModelUpload() {
 
         if (!response.ok) {
           console.error("Server error details:", result);
-          setDebugInfo(`Server Error: ${JSON.stringify(result, null, 2)}`);
           throw new Error(
             result.error ||
               `Failed to upload chunk ${chunkIndex + 1}: ${response.status} ${
@@ -172,9 +164,6 @@ export default function ModelUpload() {
         if (result.completed) {
           console.log("Upload completed successfully!", result);
           setUploadSuccess(true);
-          setDebugInfo(
-            `Success! Model ID: ${result.model?.$id}, File ID: ${result.file?.$id}`
-          );
 
           // Reset form after success
           setTimeout(() => {
@@ -193,9 +182,6 @@ export default function ModelUpload() {
 
       // Add debug info for the error
       if (error instanceof Error) {
-        setDebugInfo(
-          `Error: ${error.message}\nStack: ${error.stack?.substring(0, 500)}`
-        );
       }
     } finally {
       setIsUploading(false);
@@ -211,7 +197,6 @@ export default function ModelUpload() {
     setCurrentChunk(0);
     setTotalChunks(0);
     setUploadError("");
-    setDebugInfo("");
   };
 
   // Format file size for display
@@ -233,23 +218,6 @@ export default function ModelUpload() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Debug Info */}
-          {debugInfo && (
-            <Alert>
-              <Bug className="h-4 w-4" />
-              <AlertDescription>
-                <details>
-                  <summary className="cursor-pointer font-medium">
-                    Debug Information
-                  </summary>
-                  <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto max-h-32">
-                    {debugInfo}
-                  </pre>
-                </details>
-              </AlertDescription>
-            </Alert>
-          )}
-
           {/* File Upload */}
           <div className="space-y-2">
             <Label htmlFor="file">Select Model File</Label>
@@ -337,7 +305,7 @@ export default function ModelUpload() {
               </div>
               {totalChunks > 1 && (
                 <p className="text-xs text-muted-foreground text-center">
-                  Using 3MB chunks to comply with Vercel limits
+                  Uploading using 3MB chunks
                 </p>
               )}
             </div>

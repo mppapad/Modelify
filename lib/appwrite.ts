@@ -1,4 +1,12 @@
-import { Client, Account, Databases, Storage, ID } from "appwrite";
+import {
+  Client,
+  Account,
+  Databases,
+  Storage,
+  ID,
+  Permission,
+  Role,
+} from "appwrite";
 
 const client = new Client();
 
@@ -59,6 +67,22 @@ export const createAppwriteUserId = (kindeUserId: string): string => {
   return safeId.substring(0, 36);
 };
 
+// Helper function to get file permissions based on public status
+export const getFilePermissions = (userId: string, isPublic = false) => {
+  const permissions = [
+    Permission.read(Role.user(userId)),
+    Permission.update(Role.user(userId)),
+    Permission.delete(Role.user(userId)),
+  ];
+
+  // Add public read permission if the file is public
+  if (isPublic) {
+    permissions.push(Permission.read(Role.any()));
+  }
+
+  return permissions;
+};
+
 // Admin client for server-side operations - lazy initialization
 let _adminClient: Client | null = null;
 let _adminDatabases: Databases | null = null;
@@ -113,4 +137,4 @@ export const config = {
   bucketId: BUCKET_ID,
 };
 
-export { client, ID };
+export { client, ID, Permission, Role };

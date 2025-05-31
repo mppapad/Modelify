@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import {
   databases,
+  users,
   DATABASE_ID,
   USERS_COLLECTION_ID,
 } from "@/lib/appwrite-server";
@@ -21,25 +22,72 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Use your existing createAppwriteUserId function
     const appwriteUserId = createAppwriteUserId(user.id);
 
-    // Check if user already exists
+    let appwriteUser;
+    let isNewUser = false;
+
+    // Step 1: Check if user exists in Appwrite Auth, if not create them
     try {
-      const existingUser = await databases.getDocument(
+      console.log("Checking if user exists in Appwrite Auth:", appwriteUserId);
+      appwriteUser = await users.get(appwriteUserId);
+      console.log("User found in Appwrite Auth:", appwriteUser.$id);
+    } catch (error: any) {
+      console.log(
+        "User not found in Appwrite Auth, error:",
+        error.code,
+        error.message
+      );
+
+      if (error.code === 404) {
+        try {
+          console.log("Creating user in Appwrite Auth...");
+          // Create user in Appwrite Auth
+          appwriteUser = await users.create(
+            appwriteUserId,
+            user.email || "",
+            undefined, // phone (optional)
+            undefined, // password (not needed for OAuth users)
+            user.given_name && user.family_name
+              ? `${user.given_name} ${user.family_name}`
+              : user.email?.split("@")[0] || "User"
+          );
+          console.log(
+            "Successfully created user in Appwrite Auth:",
+            appwriteUser.$id
+          );
+          isNewUser = true;
+        } catch (createError: any) {
+          console.error("Failed to create user in Appwrite Auth:", createError);
+          throw createError;
+        }
+      } else {
+        throw error;
+      }
+    }
+
+    // Step 2: Handle the user document in your custom collection
+    let userDocument;
+    try {
+      userDocument = await databases.getDocument(
         DATABASE_ID,
         USERS_COLLECTION_ID,
         appwriteUserId
       );
 
+      // User document exists, return it
       return NextResponse.json({
         success: true,
-        user: existingUser,
+        user: userDocument,
+        appwriteUser,
         appwriteUserId,
+        isNewUser: false,
       });
     } catch (error: any) {
-      // If user doesn't exist (404), create them
+      // If document doesn't exist (404), create it
       if (error.code === 404) {
-        const newUser = await databases.createDocument(
+        userDocument = await databases.createDocument(
           DATABASE_ID,
           USERS_COLLECTION_ID,
           appwriteUserId,
@@ -56,8 +104,10 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
           success: true,
-          user: newUser,
+          user: userDocument,
+          appwriteUser,
           appwriteUserId,
+          isNewUser,
           created: true,
         });
       } else {
