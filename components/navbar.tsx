@@ -11,7 +11,6 @@ export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { isAuthenticated, isLoading } = useKindeBrowserClient();
 
-  // Smooth scroll to section function
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
@@ -20,90 +19,121 @@ export default function Navbar() {
         block: "start",
       });
     }
-    setIsMenuOpen(false); // Close mobile menu after clicking
+    setIsMenuOpen(false);
   };
 
   return (
-    <nav className="sticky top-0 z-50 w-full  border-border/40 bg-black/95 backdrop-blur supports-[backdrop-filter]:bg-black/60">
-      <div className="container mx-auto flex items-center justify-between px-4 py-4">
-        {/* Logo/Brand and Desktop Navigation */}
-        <div className="flex items-center space-x-8">
-          <Link href="/" className="flex items-center space-x-2 group">
-            <div className="p-2 rounded-xl bg-purple-600/10 group-hover:bg-purple-600/20 transition-colors">
-              <View size={24} className="text-purple-400" strokeWidth={1.5} />
-            </div>
-            <span className="text-xl font-semibold text-white">Modelify</span>
+    <>
+      <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-transparent backdrop-blur-md">
+        <div className=" flex h-16 items-center px-4">
+          {/* Logo */}
+          <Link href="/" className="flex items-center space-x-2">
+            <View className="h-5 w-5 text-white" />
+            <span className="font-semibold text-white">Modelify</span>
           </Link>
 
-          {/* Desktop Navigation - moved next to logo */}
-          <div className="hidden md:flex items-center space-x-6">
+          {/* Centered Desktop Navigation */}
+          <nav className="hidden md:flex items-center space-x-8 flex-1 justify-center">
             <button
               onClick={() => scrollToSection("features")}
-              className="text-m text-white hover:text-black transition-colors cursor-pointer hover:border-[0.25px] hover:bg-neutral-200 rounded-lg border-neutral-700 py-1 px-2"
+              className="text-sm text-white/70 hover:text-white transition-colors"
             >
               Features
             </button>
             <Link
               href="/live-demo"
-              className="text-m text-white hover:text-black transition-colors cursor-pointer hover:border-[0.25px] hover:bg-neutral-200 rounded-lg border-neutral-700 py-1 px-2"
+              className="text-sm text-white/70 hover:text-white transition-colors"
             >
               Demo
             </Link>
-          </div>
-        </div>
+          </nav>
 
-        {/* Desktop CTA */}
-        <div className="hidden md:flex items-center space-x-4">
-          <Button
-            asChild
-            className="bg-purple-600 hover:bg-purple-700 text-white  px-6"
-          >
-            <LoginLink>Sign in</LoginLink>
-          </Button>
-        </div>
-
-        {/* Mobile Menu Button */}
-        <button
-          className="md:hidden p-2 rounded-lg hover:bg-muted/10 transition-colors"
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-          aria-label="Toggle menu"
-        >
-          {isMenuOpen ? (
-            <X size={24} className="text-white" />
-          ) : (
-            <Menu size={24} className="text-white" />
-          )}
-        </button>
-      </div>
-
-      {/* Mobile Menu */}
-      {isMenuOpen && (
-        <div className="md:hidden border-t border-border/40 bg-black/95 backdrop-blur">
-          <div className="container mx-auto px-4 py-6 space-y-4">
-            <button
-              onClick={() => scrollToSection("features")}
-              className="block text-lg text-white hover:text-purple-700 transition-colors py-2 w-full  hover:bg-purple-700 rounded-lg text-center border-[0.25px] border-neutral-700"
-            >
-              Features
-            </button>
-            <Link
-              href="/live-demo"
-              className="block text-white hover:text-purple-700 transition-colors py-2 text-lg rounded-lg text-center border-[0.25px] border-neutral-700"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Demo
-            </Link>
-            <div className="pt-4 border-t border-border/20 space-y-3">
+          {/* Right side - Always show button */}
+          <div className="flex items-center space-x-4">
+            {isAuthenticated ? (
               <Button
                 asChild
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-full"
+                size="sm"
+                className="hidden md:inline-flex bg-white text-black hover:bg-white/90"
               >
-                <LoginLink> Sign in</LoginLink>
+                <Link href="/dashboard" className="flex items-center gap-1">
+                  Dashboard
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
               </Button>
+            ) : (
+              <Button
+                asChild
+                size="sm"
+                className="hidden md:inline-flex bg-white text-black hover:bg-white/90"
+              >
+                <LoginLink>Sign in</LoginLink>
+              </Button>
+            )}
+
+            {/* Mobile menu button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="md:hidden text-white hover:bg-white/10"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            >
+              {isMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile Navigation - Absolutely positioned to break out of container */}
+      {isMenuOpen && (
+        <div className="fixed top-16 left-0 right-0 z-40 md:hidden border-b border-white/10 bg-black/95 backdrop-blur-md animate-in slide-in-from-top-2 duration-200">
+          <div className="px-4 py-6">
+            <nav className="space-y-4">
+              <button
+                onClick={() => scrollToSection("features")}
+                className="block w-full text-left text-white/70 hover:text-white transition-colors py-2"
+              >
+                Features
+              </button>
+              <Link
+                href="/live-demo"
+                className="block text-white/70 hover:text-white transition-colors py-2"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Demo
+              </Link>
+            </nav>
+
+            <div className="mt-6 pt-6 border-t border-white/10">
+              {isAuthenticated ? (
+                <Button
+                  asChild
+                  className="w-full bg-white text-black hover:bg-white/90"
+                >
+                  <Link
+                    href="/dashboard"
+                    className="flex items-center justify-center gap-2"
+                  >
+                    Dashboard
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              ) : (
+                <Button
+                  asChild
+                  className="w-full bg-white text-black hover:bg-white/90"
+                >
+                  <LoginLink>Sign in</LoginLink>
+                </Button>
+              )}
             </div>
           </div>
         </div>
       )}
-    </nav>
+    </>
   );
 }
