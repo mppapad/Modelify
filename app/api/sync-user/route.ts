@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     let appwriteUser;
     let isNewUser = false;
 
-    // Step 1: Check if user exists in Appwrite Auth, if not create them
+    // Check if user exists in Appwrite Auth, if not create them
     try {
       console.log("Checking if user exists in Appwrite Auth:", appwriteUserId);
       appwriteUser = await users.get(appwriteUserId);
@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
           appwriteUser = await users.create(
             appwriteUserId,
             user.email || "",
-            undefined, // phone (optional)
-            undefined, // password (not needed for OAuth users)
+            undefined,
+            undefined,
             user.given_name && user.family_name
               ? `${user.given_name} ${user.family_name}`
               : user.email?.split("@")[0] || "User"
@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
           USERS_COLLECTION_ID,
           appwriteUserId,
           {
+            appwriteId: appwriteUserId, // Add this required field
             name:
               user.given_name && user.family_name
                 ? `${user.given_name} ${user.family_name}`

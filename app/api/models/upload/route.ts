@@ -92,43 +92,6 @@ const checkUploadPermissions = async (
     }
 
     // TEMPORARILY DISABLE THESE CHECKS FOR TESTING
-    // We'll keep the file size check above but disable the quota checks
-
-    /* 
-    // Check total number of files uploaded by user
-    const userModels = await adminDatabases.listDocuments(config.databaseId, config.modelsCollectionId, [
-      `userId=${userId}`,
-    ])
-
-    const maxFiles = isPremium ? UPLOAD_LIMITS.PREMIUM_MAX_FILES : UPLOAD_LIMITS.MAX_FILES_PER_USER
-
-    if (userModels.total >= maxFiles) {
-      return {
-        allowed: false,
-        reason: `Upload limit reached. Maximum files: ${maxFiles}${
-          !isPremium ? ". Upgrade to premium for more storage." : ""
-        }`,
-      }
-    }
-
-    // Check daily upload limit
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const todayISO = today.toISOString()
-
-    const todayUploads = await adminDatabases.listDocuments(config.databaseId, config.modelsCollectionId, [
-      `userId=${userId}`,
-      `createdAt>=${todayISO}`,
-    ])
-
-    if (todayUploads.total >= UPLOAD_LIMITS.MAX_FILES_PER_DAY && !isPremium) {
-      return {
-        allowed: false,
-        reason: `Daily upload limit reached. Maximum: ${UPLOAD_LIMITS.MAX_FILES_PER_DAY} files per day. Upgrade to premium for unlimited daily uploads.`,
-      }
-    }
-    */
-
     return { allowed: true };
   } catch (error) {
     console.error("Error checking upload permissions:", error);
@@ -138,10 +101,17 @@ const checkUploadPermissions = async (
 };
 
 // Validate file content (basic security check)
+// Modified to handle both single files and complete assembled files
 const validateFileContent = async (
-  file: File
+  file: File,
+  isChunk: boolean = false
 ): Promise<{ valid: boolean; reason?: string }> => {
   try {
+    // Skip validation for individual chunks - only validate complete files
+    if (isChunk) {
+      return { valid: true };
+    }
+
     // Check file signature/magic bytes for common 3D formats
     const buffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(buffer.slice(0, 12));
@@ -174,6 +144,29 @@ const validateFileContent = async (
   }
 };
 
+// Validate complete assembled file from chunks
+const validateAssembledFile = async (
+  buffer: Buffer,
+  filename: string
+): Promise<{ valid: boolean; reason?: string }> => {
+  try {
+    // Create a temporary File object for validation
+    const tempFile = new File([buffer as BlobPart], filename, {
+      type: filename.endsWith(".glb")
+        ? "model/gltf-binary"
+        : filename.endsWith(".gltf")
+        ? "model/gltf+json"
+        : "application/octet-stream",
+    });
+
+    // Use the existing validation function
+    return await validateFileContent(tempFile, false);
+  } catch (error) {
+    console.error("Assembled file validation error:", error);
+    return { valid: false, reason: "Unable to validate assembled file" };
+  }
+};
+
 // POST handler for file uploads
 export async function POST(request: NextRequest) {
   try {
@@ -198,7 +191,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
     const name = formData.get("name") as string;
     const description = (formData.get("description") as string) || "";
-    const isPublic = formData.get("isPublic") === "true"; // Allow users to set privacy
+    const isPublic = formData.get("isPublic") === "true";
 
     // Chunking parameters
     const chunkIndex = formData.get("chunkIndex");
@@ -255,18 +248,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file content for security
-    const contentValidation = await validateFileContent(file);
-    if (!contentValidation.valid) {
-      return NextResponse.json(
-        { error: contentValidation.reason },
-        { status: 400 }
-      );
-    }
-
     // Handle chunked upload
     if (chunkIndex !== null && totalChunks !== null && uploadId) {
       console.log("Processing chunked upload");
+      // Skip validation for individual chunks
       return await handleChunkedUpload({
         file,
         name: name.trim(),
@@ -279,6 +264,15 @@ export async function POST(request: NextRequest) {
           uploadId: uploadId as string,
         },
       });
+    }
+
+    // Validate file content for single uploads only
+    const contentValidation = await validateFileContent(file, false);
+    if (!contentValidation.valid) {
+      return NextResponse.json(
+        { error: contentValidation.reason },
+        { status: 400 }
+      );
     }
 
     // Handle single file upload
@@ -336,7 +330,7 @@ async function handleSingleUpload({
       config.bucketId,
       fileId,
       new File([buffer], file.name, { type: file.type }),
-      filePermissions // Set permissions based on public status
+      filePermissions
     );
 
     console.log("File uploaded to Appwrite storage:", uploadedFile.$id);
@@ -350,7 +344,7 @@ async function handleSingleUpload({
       fileSize: file.size,
       mimeType: file.type,
       userId,
-      kindeUserId: userId, // Store the original Kinde user ID for permissions
+      kindeUserId: userId,
       isPublic,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -419,7 +413,7 @@ async function handleChunkedUpload({
           description,
           originalFilename: file.name,
           mimeType: file.type,
-          totalSize: 0, // Will be calculated when all chunks are received
+          totalSize: 0,
           userId,
           isPublic,
         },
@@ -432,12 +426,12 @@ async function handleChunkedUpload({
       throw new Error(`Upload state not found for ID: ${uploadId}`);
     }
 
-    // Adds safety check for chunks array
+    // Safety check for chunks array
     if (!uploadState.chunks || !Array.isArray(uploadState.chunks)) {
       throw new Error(`Invalid chunks array for upload ID: ${uploadId}`);
     }
 
-    // Adds bounds checking
+    // Bounds checking
     if (chunkIndex < 0 || chunkIndex >= uploadState.chunks.length) {
       throw new Error(
         `Invalid chunk index ${chunkIndex} for upload ${uploadId}`
@@ -462,7 +456,7 @@ async function handleChunkedUpload({
     if (allChunksReceived) {
       console.log("All chunks received, assembling file");
 
-      //Type safety for chunk combining
+      // Type safety for chunk combining
       const validChunks = uploadState.chunks.filter(
         (chunk): chunk is Buffer => chunk !== undefined
       );
@@ -479,6 +473,20 @@ async function handleChunkedUpload({
 
       console.log("File assembled, total size:", totalSize);
 
+      // Validate the assembled file
+      const assembledValidation = await validateAssembledFile(
+        combinedBuffer,
+        uploadState.metadata.originalFilename
+      );
+
+      if (!assembledValidation.valid) {
+        // Clean up upload state on validation failure
+        uploadStates.delete(uploadId);
+        throw new Error(assembledValidation.reason || "File validation failed");
+      }
+
+      console.log("Assembled file validation passed");
+
       // Upload combined file to Appwrite with proper permissions
       const fileId = ID.unique();
       const filePermissions = getFilePermissions(
@@ -494,7 +502,7 @@ async function handleChunkedUpload({
         new File([combinedBuffer], uploadState.metadata.originalFilename, {
           type: uploadState.metadata.mimeType,
         }),
-        filePermissions // Set permissions based on public status
+        filePermissions
       );
 
       console.log("Combined file uploaded to Appwrite:", uploadedFile.$id);
@@ -508,7 +516,7 @@ async function handleChunkedUpload({
         fileSize: totalSize,
         mimeType: uploadState.metadata.mimeType,
         userId: uploadState.metadata.userId,
-        kindeUserId: uploadState.metadata.userId, // Store the original Kinde user ID
+        kindeUserId: uploadState.metadata.userId,
         isPublic: uploadState.metadata.isPublic,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -605,7 +613,7 @@ export async function GET(request: NextRequest) {
         maxFiles: isPremium
           ? UPLOAD_LIMITS.PREMIUM_MAX_FILES
           : UPLOAD_LIMITS.MAX_FILES_PER_USER,
-        maxDailyUploads: isPremium ? -1 : UPLOAD_LIMITS.MAX_FILES_PER_DAY, // -1 means unlimited
+        maxDailyUploads: isPremium ? -1 : UPLOAD_LIMITS.MAX_FILES_PER_DAY,
         currentFiles: userModels.total,
         todayUploads: todayUploads.total,
         isPremium,

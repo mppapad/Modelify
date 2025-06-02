@@ -1,4 +1,4 @@
-// @ts-nocheck
+//@ts-nocheck
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
@@ -11,7 +11,6 @@ import {
   ScanEye,
   Info,
   Loader2,
-  Download,
 } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
@@ -73,7 +72,6 @@ export default function ModelViewPage() {
   const [modelUrl, setModelUrl] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState(false);
 
   // Viewer states
   const [currentUrl, setCurrentUrl] = useState("");
@@ -91,23 +89,40 @@ export default function ModelViewPage() {
         setLoading(true);
         setError(null);
 
+        console.log("Fetching model data for fileId:", fileId);
+
         // First, try to get model metadata (optional - for display info)
         try {
           const response = await fetch(`/api/models/get/${fileId}`);
           if (response.ok) {
             const data = await response.json();
             setModelData(data.model);
+            console.log("Model metadata loaded:", data.model);
+          } else {
+            console.log(
+              "Could not fetch model metadata, proceeding with file only"
+            );
           }
         } catch (metaError) {
-          console.log(
-            "Could not fetch model metadata, proceeding with file only"
-          );
+          console.log("Could not fetch model metadata:", metaError);
         }
 
-        // Use our secure proxy API instead of direct Appwrite URLs
-        // This hides all sensitive information like project ID and bucket ID
+        // Use our secure proxy API - this hides the direct Appwrite URL
         const secureFileUrl = `/api/models/view/${fileId}`;
-        console.log("Using secure file URL:", secureFileUrl);
+        console.log("Using secure proxy URL:", secureFileUrl);
+
+        // Test if the proxy endpoint works
+        try {
+          const testResponse = await fetch(secureFileUrl, { method: "HEAD" });
+          if (!testResponse.ok) {
+            throw new Error(`Proxy endpoint failed: ${testResponse.status}`);
+          }
+          console.log("Proxy endpoint is working");
+        } catch (testError) {
+          console.error("Proxy test failed:", testError);
+          setError("Failed to access 3D model through secure proxy");
+          return;
+        }
 
         setModelUrl(secureFileUrl);
         setCurrentUrl(window.location.href);
@@ -124,45 +139,6 @@ export default function ModelViewPage() {
       fetchModelData();
     }
   }, [fileId]);
-
-  // Download the model
-  const downloadModel = async () => {
-    try {
-      setDownloading(true);
-
-      // Use the same secure API endpoint but with download disposition
-      const response = await fetch(`/api/models/view/${fileId}?download=true`);
-
-      if (!response.ok) {
-        throw new Error("Failed to download file");
-      }
-
-      // Get the blob from the response
-      const blob = await response.blob();
-
-      // Create a download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = modelData?.fileName || `model-${fileId}.glb`;
-      link.style.display = "none";
-
-      // Trigger download
-      document.body.appendChild(link);
-      link.click();
-
-      // Cleanup
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      toast.success("Download started");
-    } catch (error) {
-      console.error("Download error:", error);
-      toast.error("Failed to download model");
-    } finally {
-      setDownloading(false);
-    }
-  };
 
   // Check AR support and load variants
   useEffect(() => {
@@ -669,30 +645,6 @@ export default function ModelViewPage() {
           </Tooltip>
         </TooltipProvider>
 
-        {/* Download Button */}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                className="h-11 w-11"
-                size="icon"
-                variant="outline"
-                onClick={downloadModel}
-                disabled={downloading}
-              >
-                {downloading ? (
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                ) : (
-                  <Download size={40} color="#000000" strokeWidth={1} />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side={"left"}>
-              <p>Download Model</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
         {/* QR Code Button */}
         <TooltipProvider>
           <Tooltip>
@@ -918,9 +870,6 @@ export default function ModelViewPage() {
                         <li>
                           <strong>AR View:</strong> See the product in your
                           physical space
-                        </li>
-                        <li>
-                          <strong>Download:</strong> Download the 3D model file
                         </li>
                         <li>
                           <strong>QR Code:</strong> Share or open on a mobile

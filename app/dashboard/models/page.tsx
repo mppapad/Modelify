@@ -19,6 +19,7 @@ import {
   Edit,
   Code,
   Trash2,
+  Eye,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -124,6 +125,10 @@ export default function SimpleModelsPage() {
   // Embed modal
   const [embedDialogOpen, setEmbedDialogOpen] = useState(false);
   const [embedModel, setEmbedModel] = useState<Model | null>(null);
+
+  // View modal for iframe
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [viewModel, setViewModel] = useState<Model | null>(null);
 
   // Add this state near the other useState declarations
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -464,6 +469,19 @@ export default function SimpleModelsPage() {
     setEmbedModel(null);
   };
 
+  const openViewModal = (model: Model) => {
+    setOpenDropdownId(null); // Close dropdown first
+    setTimeout(() => {
+      setViewModel(model);
+      setViewDialogOpen(true);
+    }, 100);
+  };
+
+  const closeViewModal = () => {
+    setViewDialogOpen(false);
+    setViewModel(null);
+  };
+
   const copyEmbedCode = async (embedCode: string) => {
     try {
       await navigator.clipboard.writeText(embedCode);
@@ -475,18 +493,10 @@ export default function SimpleModelsPage() {
 
   // Generate embed code
   const generateEmbedCode = (model: Model) => {
-    const fileUrl = getFileViewUrl(model.fileId); // Use view URL for embedding
-    const extension = getFileExtension(model.fileName);
+    // Use the view page URL for iframe embedding
+    const viewUrl = `/view/${model.fileId}`;
 
-    if (extension === "glb" || extension === "gltf") {
-      return `<model-viewer src="${fileUrl}" alt="${model.name}" auto-rotate camera-controls></model-viewer>
-<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>`;
-    } else {
-      return `<!-- Embed code for ${extension.toUpperCase()} files -->
-<iframe src="${fileUrl}" width="800" height="600" frameborder="0" title="${
-        model.name
-      }"></iframe>`;
-    }
+    return `<iframe src="${viewUrl}" width="800" height="600" frameborder="0" title="${model.name}" allowfullscreen></iframe>`;
   };
 
   // Export all URLs as JSON
@@ -546,32 +556,38 @@ export default function SimpleModelsPage() {
 
   // Add this useEffect after the existing ones
   useEffect(() => {
-    if (editDialogOpen || embedDialogOpen || deleteDialogOpen) {
+    if (
+      editDialogOpen ||
+      embedDialogOpen ||
+      deleteDialogOpen ||
+      viewDialogOpen
+    ) {
       setOpenDropdownId(null);
     }
-  }, [editDialogOpen, embedDialogOpen, deleteDialogOpen]);
+  }, [editDialogOpen, embedDialogOpen, deleteDialogOpen, viewDialogOpen]);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <header>
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold">3D Models</h1>
             <p className="text-muted-foreground">
               Download and manage your files
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <Button
               onClick={fetchModels}
               disabled={loading}
               variant="outline"
               size="sm"
               aria-label="Refresh models list"
+              className="flex-1 sm:flex-none"
             >
-              <RefreshCcw className="w-4 h-4 mr-2" aria-hidden="true" />
-              Refresh
+              <RefreshCcw className="w-4 h-4" aria-hidden="true" />
+              <span className="hidden sm:inline sm:ml-2">Refresh</span>
             </Button>
             <Button
               onClick={exportFileUrls}
@@ -579,9 +595,10 @@ export default function SimpleModelsPage() {
               variant="outline"
               size="sm"
               aria-label="Export all file URLs as JSON"
+              className="flex-1 sm:flex-none"
             >
-              <ExternalLink className="w-4 h-4 mr-2" aria-hidden="true" />
-              Export URLs
+              <ExternalLink className="w-4 h-4" aria-hidden="true" />
+              <span className="hidden sm:inline sm:ml-2">Export URLs</span>
             </Button>
           </div>
         </div>
@@ -716,7 +733,7 @@ export default function SimpleModelsPage() {
                 className="hover:shadow-md transition-shadow"
               >
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 flex-wrap sm:flex-nowrap">
                     {/* File Icon */}
                     <div
                       className={`w-12 h-12 rounded-lg flex items-center justify-center ${getFileTypeColor(
@@ -728,7 +745,7 @@ export default function SimpleModelsPage() {
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 w-full sm:w-auto">
                       <h3 className="font-semibold truncate">{model.name}</h3>
                       <p className="text-sm text-muted-foreground truncate">
                         {model.fileName} • {formatFileSize(model.fileSize)}
@@ -753,7 +770,7 @@ export default function SimpleModelsPage() {
                     </Badge>
 
                     {/* Actions */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap sm:flex-nowrap mt-2 sm:mt-0 w-full sm:w-auto justify-end">
                       <Button
                         size="sm"
                         variant="outline"
@@ -769,7 +786,18 @@ export default function SimpleModelsPage() {
                         ) : (
                           <Copy className="w-4 h-4" aria-hidden="true" />
                         )}
-                        <span className="sr-only">Copy URL</span>
+                        <span className="hidden sm:inline sm:ml-2">Copy</span>
+                      </Button>
+
+                      {/* View Button - Now opens iframe modal */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openViewModal(model)}
+                        aria-label={`View ${model.name}`}
+                      >
+                        <Eye className="w-4 h-4" aria-hidden="true" />
+                        <span className="hidden sm:inline sm:ml-2">View</span>
                       </Button>
 
                       <Button
@@ -781,18 +809,19 @@ export default function SimpleModelsPage() {
                         {downloadingId === model.$id ? (
                           <>
                             <Loader2
-                              className="w-4 h-4 mr-2 animate-spin"
+                              className="w-4 h-4 animate-spin"
                               aria-hidden="true"
                             />
-                            Downloading...
+                            <span className="hidden sm:inline sm:ml-2">
+                              Downloading...
+                            </span>
                           </>
                         ) : (
                           <>
-                            <Download
-                              className="w-4 h-4 mr-2"
-                              aria-hidden="true"
-                            />
-                            Download
+                            <Download className="w-4 h-4" aria-hidden="true" />
+                            <span className="hidden sm:inline sm:ml-2">
+                              Download
+                            </span>
                           </>
                         )}
                       </Button>
@@ -972,39 +1001,111 @@ export default function SimpleModelsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Embed Modal */}
+      {/* View Model Dialog with Iframe */}
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="max-w-[95vw] w-full h-[90vh] max-h-[90vh] p-0">
+          <DialogHeader className="p-6 pb-0">
+            <DialogTitle>View Model: {viewModel?.name}</DialogTitle>
+            <DialogDescription>
+              Preview of your 3D model from /view/{viewModel?.fileId}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 p-6 pt-4">
+            {viewModel && (
+              <iframe
+                src={`/view/${viewModel.fileId}`}
+                className="w-full h-full min-h-[60vh] border rounded-lg"
+                title={`View ${viewModel.name}`}
+                loading="lazy"
+              />
+            )}
+          </div>
+          <DialogFooter className="p-6 pt-0">
+            <Button
+              variant="outline"
+              onClick={() =>
+                window.open(`/view/${viewModel?.fileId}`, "_blank")
+              }
+              className="mr-auto"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" aria-hidden="true" />
+              Open in New Tab
+            </Button>
+            <Button variant="outline" onClick={closeViewModal}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Embed Modal - Fixed Responsive */}
       <Dialog open={embedDialogOpen} onOpenChange={setEmbedDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="max-w-[95vw] w-full sm:max-w-[700px]">
           <DialogHeader>
             <DialogTitle>Embed Code</DialogTitle>
             <DialogDescription>
-              Copy the code below to embed this model in your website.
+              Copy the iframe code below to embed this model in your website.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {embedModel && (
-              <div>
-                <Label htmlFor="embed-code" className="text-sm font-medium">
-                  Embed Code:
-                </Label>
-                <div className="mt-2 p-3 bg-gray-100 rounded-md">
-                  <code
-                    id="embed-code"
-                    className="text-sm whitespace-pre-wrap"
-                    tabIndex={0}
-                  >
-                    {generateEmbedCode(embedModel)}
-                  </code>
+              <div className="space-y-4">
+                {/* Preview */}
+                <div>
+                  <Label className="text-sm font-medium">Preview:</Label>
+                  <div className="mt-2 border rounded-lg overflow-hidden">
+                    <iframe
+                      src={`/view/${embedModel.fileId}`}
+                      className="w-full h-64 border-0"
+                      title={`Preview of ${embedModel.name}`}
+                      loading="lazy"
+                    />
+                  </div>
                 </div>
-                <Button
-                  className="mt-2"
-                  size="sm"
-                  onClick={() => copyEmbedCode(generateEmbedCode(embedModel))}
-                  aria-label="Copy embed code to clipboard"
-                >
-                  <Copy className="w-4 h-4 mr-2" aria-hidden="true" />
-                  Copy Code
-                </Button>
+
+                {/* Embed Code */}
+                <div>
+                  <Label htmlFor="embed-code" className="text-sm font-medium">
+                    Embed Code:
+                  </Label>
+                  <div className="mt-2 p-3 bg-gray-100 rounded-md max-h-[20vh] overflow-auto">
+                    <code
+                      id="embed-code"
+                      className="text-xs sm:text-sm whitespace-pre-wrap break-all"
+                      tabIndex={0}
+                    >
+                      {generateEmbedCode(embedModel)}
+                    </code>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        copyEmbedCode(generateEmbedCode(embedModel))
+                      }
+                      aria-label="Copy embed code to clipboard"
+                      className="flex-1 sm:flex-none"
+                    >
+                      <Copy className="w-4 h-4" aria-hidden="true" />
+                      <span className="hidden sm:inline sm:ml-2">
+                        Copy Code
+                      </span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        window.open(`/view/${embedModel.fileId}`, "_blank")
+                      }
+                      className="flex-1 sm:flex-none"
+                    >
+                      <ExternalLink className="w-4 h-4" aria-hidden="true" />
+                      <span className="hidden sm:inline sm:ml-2">
+                        Open Full
+                      </span>
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
