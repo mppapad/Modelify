@@ -5,6 +5,7 @@ import {
   DATABASE_ID,
   MODELS_COLLECTION_ID,
 } from "@/lib/appwrite";
+import { Query } from "appwrite"; // ✅ Import Query
 
 export async function GET(
   request: NextRequest,
@@ -24,11 +25,11 @@ export async function GET(
     const { getUser } = getKindeServerSession();
     const user = await getUser();
 
-    // Query the database to find the model document by fileId
+    // ✅ FIX: Use proper Query syntax (same as your view endpoint)
     const models = await adminDatabases.listDocuments(
       DATABASE_ID,
       MODELS_COLLECTION_ID,
-      [`fileId=${fileId}`]
+      [Query.equal("fileId", fileId)] // ✅ Correct syntax
     );
 
     if (models.documents.length === 0) {
@@ -37,6 +38,7 @@ export async function GET(
 
     const model = models.documents[0];
 
+    // ✅ FIX: Use consistent field name (kindeUserId vs userId)
     // Check if the user has access to this model
     if (!model.isPublic && (!user || model.kindeUserId !== user.id)) {
       return NextResponse.json(

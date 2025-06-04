@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,118 +20,112 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
   Mail,
-  Phone,
   MessageSquare,
   Clock,
   Copy,
   Check,
   HelpCircle,
   FileQuestion,
-  HeartHandshake,
 } from "lucide-react";
 
 // Import the skeleton component
 const GetHelpPageSkeleton = () => {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-12 px-4">
+    <div className="min-h-screen bg-background py-12 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Header Skeleton */}
         <div className="text-center mb-8">
-          <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded-md w-48 mx-auto mb-2 animate-pulse"></div>
-          <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-72 mx-auto animate-pulse"></div>
+          <div className="h-8 bg-muted rounded-md w-48 mx-auto mb-2 animate-pulse"></div>
+          <div className="h-4 bg-muted rounded-md w-72 mx-auto animate-pulse"></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {/* Contact Form Card Skeleton */}
-          <div className="col-span-1 md:col-span-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <div className="col-span-1 md:col-span-2 bg-card rounded-lg shadow-sm p-6">
             <div className="mb-4">
-              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-48 animate-pulse"></div>
-              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-64 mt-2 animate-pulse"></div>
+              <div className="h-6 bg-muted rounded-md w-48 animate-pulse"></div>
+              <div className="h-4 bg-muted rounded-md w-64 mt-2 animate-pulse"></div>
             </div>
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-16 animate-pulse"></div>
-                  <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded-md w-full animate-pulse"></div>
+                  <div className="h-4 bg-muted rounded-md w-16 animate-pulse"></div>
+                  <div className="h-10 bg-muted rounded-md w-full animate-pulse"></div>
                 </div>
                 <div className="space-y-2">
-                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-16 animate-pulse"></div>
-                  <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded-md w-full animate-pulse"></div>
+                  <div className="h-4 bg-muted rounded-md w-16 animate-pulse"></div>
+                  <div className="h-10 bg-muted rounded-md w-full animate-pulse"></div>
                 </div>
               </div>
               <div className="space-y-2">
-                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-24 animate-pulse"></div>
-                <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded-md w-full animate-pulse"></div>
+                <div className="h-4 bg-muted rounded-md w-24 animate-pulse"></div>
+                <div className="h-10 bg-muted rounded-md w-full animate-pulse"></div>
               </div>
               <div className="space-y-2">
-                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-20 animate-pulse"></div>
-                <div className="h-32 bg-slate-200 dark:bg-slate-700 rounded-md w-full animate-pulse"></div>
+                <div className="h-4 bg-muted rounded-md w-20 animate-pulse"></div>
+                <div className="h-32 bg-muted rounded-md w-full animate-pulse"></div>
               </div>
-              <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded-md w-40 animate-pulse"></div>
+              <div className="h-10 bg-muted rounded-md w-40 animate-pulse"></div>
             </div>
           </div>
 
           {/* Support Admin Card Skeleton */}
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <div className="bg-card rounded-lg shadow-sm p-6">
             <div className="mb-4">
-              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-48 animate-pulse"></div>
-              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-40 mt-2 animate-pulse"></div>
+              <div className="h-6 bg-muted rounded-md w-48 animate-pulse"></div>
+              <div className="h-4 bg-muted rounded-md w-40 mt-2 animate-pulse"></div>
             </div>
             <div className="flex items-center mb-4">
-              <div className="h-16 w-16 bg-slate-200 dark:bg-slate-700 rounded-full mr-4 animate-pulse"></div>
+              <div className="h-16 w-16 bg-muted rounded-full mr-4 animate-pulse"></div>
               <div className="space-y-2">
-                <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded-md w-32 animate-pulse"></div>
-                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-24 animate-pulse"></div>
+                <div className="h-5 bg-muted rounded-md w-32 animate-pulse"></div>
+                <div className="h-4 bg-muted rounded-md w-24 animate-pulse"></div>
               </div>
             </div>
-            <div className="h-px bg-slate-200 dark:bg-slate-700 w-full my-4"></div>
+            <div className="h-px bg-border w-full my-4"></div>
             <div className="space-y-3">
-              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-36 animate-pulse"></div>
+              <div className="h-4 bg-muted rounded-md w-36 animate-pulse"></div>
               <div className="flex items-center gap-2">
-                <div className="h-4 w-4 bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse"></div>
-                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md flex-grow animate-pulse"></div>
+                <div className="h-4 w-4 bg-muted rounded-full animate-pulse"></div>
+                <div className="h-4 bg-muted rounded-md flex-grow animate-pulse"></div>
               </div>
               <div className="flex items-center gap-2">
-                <div className="h-4 w-4 bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse"></div>
-                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-32 animate-pulse"></div>
+                <div className="h-4 w-4 bg-muted rounded-full animate-pulse"></div>
+                <div className="h-4 bg-muted rounded-md w-32 animate-pulse"></div>
               </div>
             </div>
           </div>
         </div>
 
         {/* FAQ Card Skeleton */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-8">
+        <div className="bg-card rounded-lg shadow-sm p-6 mb-8">
           <div className="mb-4">
-            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-48 animate-pulse"></div>
-            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-64 mt-2 animate-pulse"></div>
+            <div className="h-6 bg-muted rounded-md w-48 animate-pulse"></div>
+            <div className="h-4 bg-muted rounded-md w-64 mt-2 animate-pulse"></div>
           </div>
           <div className="space-y-4">
             {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="py-3 border-b border-slate-200 dark:border-slate-700"
-              >
-                <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded-md w-full max-w-md animate-pulse"></div>
+              <div key={i} className="py-3 border-b border-border">
+                <div className="h-5 bg-muted rounded-md w-full max-w-md animate-pulse"></div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Knowledge Base Skeleton */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+        <div className="bg-card rounded-lg shadow-sm p-6">
           <div className="mb-4">
-            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-32 animate-pulse"></div>
-            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-64 mt-2 animate-pulse"></div>
+            <div className="h-6 bg-muted rounded-md w-32 animate-pulse"></div>
+            <div className="h-4 bg-muted rounded-md w-64 mt-2 animate-pulse"></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="h-16 bg-slate-200 dark:bg-slate-700 rounded-md animate-pulse"
+                className="h-16 bg-muted rounded-md animate-pulse"
               ></div>
             ))}
           </div>
@@ -209,11 +203,11 @@ export default function GetHelpPage() {
 
   // Show actual content once loaded
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-12 px-4">
+    <div className="min-h-screen bg-background py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold tracking-tight mb-2">Get Help</h1>
-          <p className="text-slate-600 dark:text-slate-400 max-w-lg mx-auto">
+          <p className="text-muted-foreground max-w-lg mx-auto">
             Have questions or need assistance? Our support team is here to help
             you.
           </p>
@@ -313,15 +307,13 @@ export default function GetHelpPage() {
             <CardContent className="space-y-6">
               <div className="flex items-center">
                 <Avatar className="h-16 w-16 mr-4">
-                  <AvatarFallback className="bg-blue-100 text-blue-800 text-lg">
+                  <AvatarFallback className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300 text-lg">
                     MP
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <h3 className="font-medium">Miltiadis Papadopoulos</h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Administrator
-                  </p>
+                  <p className="text-sm text-muted-foreground">Administrator</p>
                   <Badge variant="outline" className="mt-1 text-xs">
                     Available
                   </Badge>
@@ -333,7 +325,7 @@ export default function GetHelpPage() {
               <div className="space-y-3">
                 <h4 className="text-sm font-medium">Contact Information</h4>
                 <div className="flex items-center gap-2 text-sm">
-                  <Mail className="h-4 w-4 text-slate-500" />
+                  <Mail className="h-4 w-4 text-muted-foreground" />
                   <span className="flex-grow truncate">
                     miltospap5@gmail.com
                   </span>
@@ -350,7 +342,7 @@ export default function GetHelpPage() {
                     )}
                   </Button>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Clock className="h-4 w-4" />
                   <span>Response time: ~24 hours</span>
                 </div>
@@ -429,7 +421,7 @@ export default function GetHelpPage() {
                     className="h-auto p-4 justify-start text-left flex flex-col items-start"
                   >
                     <span className="font-medium">Getting Started Guide</span>
-                    <span className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    <span className="text-sm text-muted-foreground mt-1">
                       Learn the basics of our platform
                     </span>
                   </Button>
@@ -438,7 +430,7 @@ export default function GetHelpPage() {
                     className="h-auto p-4 justify-start text-left flex flex-col items-start"
                   >
                     <span className="font-medium">Analytics Tutorial</span>
-                    <span className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    <span className="text-sm text-muted-foreground mt-1">
                       How to use the analytics dashboard
                     </span>
                   </Button>
@@ -447,7 +439,7 @@ export default function GetHelpPage() {
                     className="h-auto p-4 justify-start text-left flex flex-col items-start"
                   >
                     <span className="font-medium">API Documentation</span>
-                    <span className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    <span className="text-sm text-muted-foreground mt-1">
                       Integrate with our API
                     </span>
                   </Button>
@@ -456,7 +448,7 @@ export default function GetHelpPage() {
                     className="h-auto p-4 justify-start text-left flex flex-col items-start"
                   >
                     <span className="font-medium">Troubleshooting</span>
-                    <span className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    <span className="text-sm text-muted-foreground mt-1">
                       Common issues and solutions
                     </span>
                   </Button>

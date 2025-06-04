@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MailIcon, PlusCircleIcon, type LucideIcon } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
+import { PlusCircleIcon, type LucideIcon } from "lucide-react";
 import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 export function NavMain({
@@ -25,6 +24,7 @@ export function NavMain({
   className?: string;
 }) {
   const pathname = usePathname();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   return (
     <SidebarGroup className={className}>
@@ -35,6 +35,8 @@ export function NavMain({
               href="/dashboard/upload"
               onClick={(e) => {
                 if (pathname === "/dashboard/upload") e.preventDefault();
+                // Close sidebar on mobile when clicking upload
+                if (isMobile) setOpenMobile(false);
               }}
               className="w-full"
             >
@@ -58,6 +60,8 @@ export function NavMain({
                   href={item.url}
                   onClick={(e) => {
                     if (isActive) e.preventDefault();
+                    // Close sidebar on mobile when clicking a navigation item
+                    if (isMobile) setOpenMobile(false);
                   }}
                   className="w-full"
                 >

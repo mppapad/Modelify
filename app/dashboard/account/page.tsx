@@ -1,10 +1,18 @@
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { AccountPageClient } from "@/components/account/account-client";
-import { UserData } from "@/types/user-data";
 
 // Change header
 export const metadata = {
   title: "Modelify | Account",
+};
+
+type UserData = {
+  id: string;
+  name: string;
+  email: string;
+  imageUrl: string;
+  given_name: string;
+  family_name: string;
 };
 
 export default async function AccountPage() {

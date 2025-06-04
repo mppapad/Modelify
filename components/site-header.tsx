@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -6,7 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
 // Navigation data for path to title mapping
-const routeTitles = {
+const routeTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/dashboard/models": "Models",
   "/dashboard/analytics": "Analytics",
@@ -52,6 +51,7 @@ export function SiteHeader() {
           className="mx-2 data-[orientation=vertical]:h-4"
         />
         <h1 className="text-base font-medium">{pageTitle}</h1>
+        <div className="ml-auto"></div>
       </div>
     </header>
   );

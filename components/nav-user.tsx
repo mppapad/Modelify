@@ -1,12 +1,6 @@
 "use client";
 import Link from "next/link";
-import {
-  BellIcon,
-  CreditCardIcon,
-  LogOutIcon,
-  MoreVerticalIcon,
-  UserCircleIcon,
-} from "lucide-react";
+import { LogOutIcon, MoreVerticalIcon, UserCircleIcon } from "lucide-react";
 import { LogoutLink } from "@kinde-oss/kinde-auth-nextjs/components";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -26,6 +20,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 // Skeleton component for user avatar and info
 const NavUserSkeleton = () => {
@@ -33,21 +28,27 @@ const NavUserSkeleton = () => {
     <SidebarMenu>
       <SidebarMenuItem>
         <SidebarMenuButton size="lg">
-          <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse"></div>
+          <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse"></div>
           <div className="grid flex-1 text-left gap-1">
-            <div className="h-4 w-24 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
-            <div className="h-3 w-32 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
+            <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+            <div className="h-3 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
           </div>
-          <div className="ml-auto h-4 w-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
+          <div className="ml-auto h-4 w-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>
   );
 };
 
-export function NavUser({}) {
+export function NavUser() {
   const { isMobile } = useSidebar();
   const { user, isLoading } = useKindeBrowserClient();
+  const [mounted, setMounted] = useState(false);
+
+  // Ensure component is mounted before rendering to prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Default values in case first_name or last_name are undefined
   let firstInitial = "?";
@@ -67,12 +68,11 @@ export function NavUser({}) {
   const initials = firstInitial + lastInitial;
 
   const pathname = usePathname();
-  const accountPath = "/dashboard/account"; // Use absolute path
-  // If already on account page, prevent navigation or apply different styling
+  const accountPath = "/dashboard/account";
   const isActive = pathname === accountPath;
 
-  // Show skeleton during loading
-  if (isLoading || !user) {
+  // Show skeleton during loading or before mount
+  if (!mounted || isLoading || !user) {
     return <NavUserSkeleton />;
   }
 
@@ -85,7 +85,7 @@ export function NavUser({}) {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 ">
+              <Avatar className="h-8 w-8">
                 <AvatarImage
                   src={user.picture || ""}
                   alt={`${user.given_name}'s profile`}

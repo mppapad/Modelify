@@ -7,6 +7,11 @@ import {
   BUCKET_ID,
 } from "@/lib/appwrite-server";
 
+// Add this constant for analytics collection
+const ANALYTICS_COLLECTION_ID =
+  process.env.APPWRITE_ANALYTICS_COLLECTION_ID || "analytics_events";
+
+// Modify the DELETE function to also delete analytics data
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -27,6 +32,7 @@ export async function DELETE(
     console.log("Using DATABASE_ID:", DATABASE_ID);
     console.log("Using MODELS_COLLECTION_ID:", MODELS_COLLECTION_ID);
     console.log("Using BUCKET_ID:", BUCKET_ID);
+    console.log("Using ANALYTICS_COLLECTION_ID:", ANALYTICS_COLLECTION_ID);
 
     if (!modelId) {
       return NextResponse.json(
@@ -114,6 +120,36 @@ export async function DELETE(
       }
     }
 
+    // Delete associated analytics data
+    try {
+      // Use a query to find all analytics events for this model
+      const { Query } = require("node-appwrite");
+      const analyticsEvents = await databases.listDocuments(
+        DATABASE_ID,
+        ANALYTICS_COLLECTION_ID,
+        [Query.equal("modelId", modelId)]
+      );
+
+      console.log(
+        `Found ${analyticsEvents.documents.length} analytics events to delete`
+      );
+
+      // Delete each analytics event
+      for (const event of analyticsEvents.documents) {
+        await databases.deleteDocument(
+          DATABASE_ID,
+          ANALYTICS_COLLECTION_ID,
+          event.$id
+        );
+        console.log(`Deleted analytics event: ${event.$id}`);
+      }
+
+      console.log(`All analytics events for model ${modelId} deleted`);
+    } catch (analyticsError: any) {
+      console.error("Error deleting analytics data:", analyticsError);
+      // Continue with model deletion even if analytics deletion fails
+    }
+
     // Delete the model document from database
     try {
       await databases.deleteDocument(
@@ -146,7 +182,7 @@ export async function DELETE(
     return NextResponse.json(
       {
         success: true,
-        message: "Model deleted successfully",
+        message: "Model and associated analytics deleted successfully",
         deletedModelId: modelId,
       },
       { status: 200 }

@@ -1,7 +1,11 @@
 //@ts-nocheck
 "use client";
+
+import { LoginLink } from "@kinde-oss/kinde-auth-nextjs/components";
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
+import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
+import { useRouter } from "next/navigation";
 import ModelViewer from "@/components/ModelViewer";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,7 +54,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-interface ModelData {
+interface ModelMetadata {
   $id: string;
   name: string;
   description: string;
@@ -60,18 +64,36 @@ interface ModelData {
   mimeType: string;
   userId: string;
   isPublic?: boolean;
+  views?: number;
   createdAt: string;
+  updatedAt?: string;
+  lastViewedAt?: string;
+  tags?: string[];
+  category?: string;
+}
+
+interface ApiError {
+  error: string;
+  message?: string;
+  requiresAuth?: boolean;
 }
 
 export default function ModelViewPage() {
   const params = useParams();
   const fileId = params.fileId as string;
+  const {
+    login,
+    isAuthenticated,
+    isLoading: authLoading,
+  } = useKindeBrowserClient();
+  const router = useRouter();
 
   // Model data and loading states
-  const [modelData, setModelData] = useState<ModelData | null>(null);
+  const [modelData, setModelData] = useState<ModelMetadata | null>(null);
   const [modelUrl, setModelUrl] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [requiresAuth, setRequiresAuth] = useState(false);
 
   // Viewer states
   const [currentUrl, setCurrentUrl] = useState("");
@@ -81,6 +103,7 @@ export default function ModelViewPage() {
   const [currentVariant, setCurrentVariant] = useState<string | null>(null);
   const arSessionActive = useRef<boolean>(false);
   const dimensionsSetup = useRef<boolean>(false);
+  const [viewRecorded, setViewRecorded] = useState(false);
 
   // Fetch model data and generate URL
   useEffect(() => {
@@ -88,23 +111,53 @@ export default function ModelViewPage() {
       try {
         setLoading(true);
         setError(null);
+        setRequiresAuth(false);
 
         console.log("Fetching model data for fileId:", fileId);
 
-        // First, try to get model metadata (optional - for display info)
+        // First, try to get model metadata with proper error handling
         try {
-          const response = await fetch(`/api/models/get/${fileId}`);
-          if (response.ok) {
-            const data = await response.json();
+          const metadataResponse = await fetch(`/api/models/get/${fileId}`);
+
+          if (metadataResponse.status === 404) {
+            setError("Model not found");
+            return;
+          }
+
+          if (metadataResponse.status === 403) {
+            const errorData: ApiError = await metadataResponse.json();
+            setError(
+              errorData.message || "Access denied - this model is private"
+            );
+            setRequiresAuth(errorData.requiresAuth || true);
+            return;
+          }
+
+          if (metadataResponse.status === 401) {
+            setError("Authentication required to view this model");
+            setRequiresAuth(true);
+            return;
+          }
+
+          if (metadataResponse.ok) {
+            const data = await metadataResponse.json();
             setModelData(data.model);
             console.log("Model metadata loaded:", data.model);
+
+            // Check if model is private and user needs to be authenticated
+            if (!data.model.isPublic && !isAuthenticated && !authLoading) {
+              setError("This model is private and requires authentication");
+              setRequiresAuth(true);
+              return;
+            }
           } else {
-            console.log(
-              "Could not fetch model metadata, proceeding with file only"
+            throw new Error(
+              `Failed to fetch metadata: ${metadataResponse.status}`
             );
           }
         } catch (metaError) {
           console.log("Could not fetch model metadata:", metaError);
+          // Continue without metadata if it's just a fetch issue
         }
 
         // Use our secure proxy API - this hides the direct Appwrite URL
@@ -114,6 +167,19 @@ export default function ModelViewPage() {
         // Test if the proxy endpoint works
         try {
           const testResponse = await fetch(secureFileUrl, { method: "HEAD" });
+
+          if (testResponse.status === 403) {
+            setError("Access denied - this model is private");
+            setRequiresAuth(true);
+            return;
+          }
+
+          if (testResponse.status === 401) {
+            setError("Authentication required to view this model");
+            setRequiresAuth(true);
+            return;
+          }
+
           if (!testResponse.ok) {
             throw new Error(`Proxy endpoint failed: ${testResponse.status}`);
           }
@@ -135,10 +201,10 @@ export default function ModelViewPage() {
       }
     };
 
-    if (fileId) {
+    if (fileId && !authLoading) {
       fetchModelData();
     }
-  }, [fileId]);
+  }, [fileId, isAuthenticated, authLoading]);
 
   // Check AR support and load variants
   useEffect(() => {
@@ -563,7 +629,28 @@ export default function ModelViewPage() {
     };
   }, []);
 
-  if (loading) {
+  //record view analytics
+  useEffect(() => {
+    if (viewRecorded || !fileId || !modelUrl) return;
+
+    const recordView = async () => {
+      try {
+        setViewRecorded(true);
+        await fetch(`/api/models/record-view/${fileId}`, {
+          method: "POST",
+        });
+        console.log("View recorded successfully");
+      } catch (error) {
+        console.error("Failed to record view:", error);
+        setViewRecorded(false); // Reset on error to allow retry
+      }
+    };
+
+    recordView();
+  }, [fileId, viewRecorded, modelUrl]);
+
+  // Show loading state
+  if (loading || authLoading) {
     return (
       <div className="h-screen w-full flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -574,12 +661,41 @@ export default function ModelViewPage() {
     );
   }
 
+  // Show error states with authentication handling
   if (error) {
     return (
       <div className="h-screen w-full flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-2">Error</h1>
-          <p className="text-muted-foreground">{error}</p>
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="text-red-500 text-6xl mb-4">
+            {error.includes("not found") ? "🔍" : "🔒"}
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            {error.includes("not found")
+              ? "Model Not Found"
+              : "Access Restricted"}
+          </h1>
+          <p className="text-gray-600 mb-6">{error}</p>
+
+          {requiresAuth && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">
+                This model is private. Please log in to access it.
+              </p>
+              <LoginLink>
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white font-medium">
+                  Log In to View
+                </Button>
+              </LoginLink>
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            onClick={() => router.push("/")}
+            className="mt-4"
+          >
+            Go back to home
+          </Button>
         </div>
       </div>
     );
@@ -589,9 +705,9 @@ export default function ModelViewPage() {
     return (
       <div className="h-screen w-full flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-2">Model Not Found</h1>
+          <h1 className="text-2xl font-bold mb-2">Model Not Available</h1>
           <p className="text-muted-foreground">
-            The requested 3D model could not be found.
+            The requested 3D model could not be loaded.
           </p>
         </div>
       </div>

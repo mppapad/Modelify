@@ -14,10 +14,6 @@ export async function GET(
   { params }: { params: Promise<{ fileId: string }> }
 ) {
   try {
-    // Get user session
-    const { getUser } = getKindeServerSession();
-    const user = await getUser();
-
     // Get fileId from params
     const { fileId } = await params;
 
@@ -54,6 +50,16 @@ export async function GET(
     }
 
     const model = models.documents[0];
+
+    // Get user session (but don't fail if not authenticated)
+    let user = null;
+    try {
+      const { getUser } = getKindeServerSession();
+      user = await getUser();
+    } catch (error) {
+      // User is not authenticated, which is fine for public models
+      console.log("User not authenticated, checking if model is public");
+    }
 
     // Check access permissions
     const hasAccess = model.isPublic || (user && model.kindeUserId === user.id);
@@ -162,8 +168,6 @@ export async function HEAD(
   { params }: { params: Promise<{ fileId: string }> }
 ) {
   try {
-    const { getUser } = getKindeServerSession();
-    const user = await getUser();
     const { fileId } = await params;
 
     // Quick validation without fetching the actual file
@@ -178,6 +182,16 @@ export async function HEAD(
     }
 
     const model = models.documents[0];
+
+    // Get user session (but don't fail if not authenticated)
+    let user = null;
+    try {
+      const { getUser } = getKindeServerSession();
+      user = await getUser();
+    } catch (error) {
+      // User is not authenticated, which is fine for public models
+    }
+
     const hasAccess = model.isPublic || (user && model.kindeUserId === user.id);
 
     if (!hasAccess) {

@@ -6,7 +6,6 @@ import {
   BarChart3,
   Layers,
   HardDrive,
-  Maximize,
   ArrowUpRight,
   Eye,
   Calendar,
@@ -18,7 +17,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -40,26 +38,8 @@ interface DashboardStats {
     createdAt: string;
     views: number;
     isPublic: boolean;
+    fileId: string; // Add this field
   }>;
-}
-
-// Navbar component (simplified version)
-function Navbar() {
-  return (
-    <div className="border-b">
-      <div className="flex h-16 items-center px-4">
-        <div className="font-bold text-xl">Modelify</div>
-        <div className="ml-auto flex items-center space-x-4">
-          <Button variant="ghost" size="sm">
-            Help
-          </Button>
-          <Button variant="ghost" size="sm">
-            Settings
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function DashboardPage() {
@@ -113,7 +93,7 @@ export default function DashboardPage() {
   return (
     <>
       {/* Main content */}
-      <div className="relative min-h-screen bg-white">
+      <div className="relative min-h-screen bg-background">
         <main className="container mx-auto p-4 md:p-6 lg:p-8 relative">
           <div className="flex flex-col md:flex-row justify-between items-start mb-8">
             <div>
@@ -137,7 +117,7 @@ export default function DashboardPage() {
               <Skeleton className="h-10 w-40 mt-4 md:mt-0" />
             ) : (
               <Button
-                className="mt-4 md:mt-0 bg-black hover:bg-gray-800 text-white"
+                className="mt-4 md:mt-0"
                 onClick={() => (window.location.href = "/dashboard/upload")}
               >
                 <Upload className=" h-5 w-5" />
@@ -148,9 +128,9 @@ export default function DashboardPage() {
 
           {/* Error State */}
           {error && !isLoading && (
-            <Card className="mb-8 border-red-200 bg-red-50">
+            <Card className="mb-8 border-destructive/20 bg-destructive/10">
               <CardContent className="pt-6">
-                <p className="text-red-600">{error}</p>
+                <p className="text-destructive">{error}</p>
               </CardContent>
             </Card>
           )}
@@ -166,7 +146,7 @@ export default function DashboardPage() {
                 {isLoading ? (
                   <Skeleton className="h-4 w-4 rounded-full" />
                 ) : (
-                  <Layers className="h-4 w-4 text-black" />
+                  <Layers className="h-4 w-4 text-muted-foreground" />
                 )}
               </CardHeader>
               <CardContent>
@@ -195,7 +175,7 @@ export default function DashboardPage() {
                 {isLoading ? (
                   <Skeleton className="h-4 w-4 rounded-full" />
                 ) : (
-                  <HardDrive className="h-4 w-4 text-black" />
+                  <HardDrive className="h-4 w-4 text-muted-foreground" />
                 )}
               </CardHeader>
               <CardContent>
@@ -217,10 +197,7 @@ export default function DashboardPage() {
                         of {data.storageLimit} MB
                       </span>
                     </div>
-                    <Progress
-                      value={data.storagePercentage}
-                      className="h-2 bg-gray-100"
-                    />
+                    <Progress value={data.storagePercentage} className="h-2" />
                   </>
                 )}
               </CardContent>
@@ -235,7 +212,7 @@ export default function DashboardPage() {
                 {isLoading ? (
                   <Skeleton className="h-4 w-4 rounded-full" />
                 ) : (
-                  <Eye className="h-4 w-4 text-black" />
+                  <Eye className="h-4 w-4 text-muted-foreground" />
                 )}
               </CardHeader>
               <CardContent>
@@ -287,7 +264,7 @@ export default function DashboardPage() {
                 ) : (
                   <div className="grid grid-cols-1 gap-2">
                     <Button
-                      className="w-full justify-start bg-black hover:bg-gray-800 text-white"
+                      className="w-full justify-start"
                       onClick={() =>
                         (window.location.href = "/dashboard/upload")
                       }
@@ -356,17 +333,20 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ) : data.recentModels.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="space-y-4 group">
                     {data.recentModels.map((model) => (
                       <div
                         key={model.$id}
-                        className="flex items-center space-x-4 p-2 rounded-lg hover:bg-gray-50"
+                        className="flex items-center space-x-4 p-2 rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                        onClick={() =>
+                          window.open(`/view/${model.fileId}`, "_blank")
+                        }
                       >
-                        <div className="h-12 w-12 rounded bg-gray-100 flex items-center justify-center">
-                          <Layers className="h-6 w-6 text-gray-400" />
+                        <div className="h-12 w-12 rounded bg-muted flex items-center justify-center">
+                          <Layers className="h-6 w-6 text-muted-foreground" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-medium text-gray-900 truncate">
+                          <h4 className="text-sm font-medium truncate">
                             {model.name}
                           </h4>
                           <div className="flex items-center space-x-2 text-xs text-muted-foreground">
@@ -386,9 +366,11 @@ export default function DashboardPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            (window.location.href = `/dashboard/models/${model.$id}`)
-                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.location.href = `/dashboard/models/${model.$id}`;
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <ArrowUpRight className="h-4 w-4" />
                         </Button>
@@ -409,16 +391,13 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-8">
-                    <Layers className="h-12 w-12 text-gray-300 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-1">
-                      No models yet
-                    </h3>
+                    <Layers className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium mb-1">No models yet</h3>
                     <p className="text-sm text-muted-foreground text-center mb-4">
                       Upload your first 3D model to get started
                     </p>
                     <Button
                       size="sm"
-                      className="bg-black hover:bg-gray-800 text-white"
                       onClick={() =>
                         (window.location.href = "/dashboard/upload")
                       }

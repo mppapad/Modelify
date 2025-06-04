@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import {
   databases,
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
       100
     );
 
-    // Get recent models (last 5)
+    // Get recent models (last 5) - FIXED: Added fileId
     const recentModels = models.slice(0, 5).map((model) => ({
       $id: model.$id,
       name: model.name,
@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
       createdAt: model.$createdAt,
       views: model.views || 0,
       isPublic: model.isPublic || false,
+      fileId: model.fileId, // ← This was missing!
     }));
 
     return NextResponse.json({

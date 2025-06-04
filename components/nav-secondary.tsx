@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import {
   SidebarGroup,
@@ -10,6 +10,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 export function NavSecondary({
@@ -24,6 +25,7 @@ export function NavSecondary({
   className?: string;
 }) {
   const pathname = usePathname();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   return (
     <SidebarGroup className={className}>
@@ -38,6 +40,8 @@ export function NavSecondary({
                   href={item.url}
                   onClick={(e) => {
                     if (isActive) e.preventDefault();
+                    // Close sidebar on mobile when clicking a navigation item
+                    if (isMobile) setOpenMobile(false);
                   }}
                   className="w-full"
                 >

@@ -1,5 +1,7 @@
 "use client";
 
+import type React from "react";
+
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Navbar from "@/components/navbar";
@@ -14,15 +16,59 @@ import {
   ArrowRight,
   Play,
   ChevronUp,
-  Star,
-  Users,
-  Download,
-  Globe,
+  PieChartIcon as ChartPie,
+  Pause,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import Footer from "@/components/footer";
 
 export default function Home() {
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
+  const [videoAspectRatio, setVideoAspectRatio] = useState<number>(16 / 9); // Default to 16:9
+
+  // Check if device is mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const togglePlayPause = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  // Handle video events to sync state
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+
+    video.addEventListener("play", handlePlay);
+    video.addEventListener("pause", handlePause);
+
+    return () => {
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
+    };
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -47,6 +93,16 @@ export default function Home() {
         behavior: "smooth",
         block: "start",
       });
+    }
+  };
+
+  // Handle video metadata loaded to get aspect ratio
+  const handleVideoLoadedMetadata = () => {
+    if (videoRef.current) {
+      const { videoWidth, videoHeight } = videoRef.current;
+      if (videoWidth && videoHeight) {
+        setVideoAspectRatio(videoWidth / videoHeight);
+      }
     }
   };
 
@@ -85,25 +141,6 @@ export default function Home() {
               viewers with materials, lighting, and AR support.
             </p>
 
-            {/* Stats Row */}
-            <div className="flex flex-wrap justify-center gap-8 mb-12 animate-fade-in-up delay-300">
-              <div className="flex items-center gap-2 text-neutral-500">
-                <Users className="w-4 h-4" />
-                <span className="text-sm font-medium text-white">10,000+</span>
-                <span className="text-sm">creators</span>
-              </div>
-              <div className="flex items-center gap-2 text-neutral-500">
-                <Download className="w-4 h-4" />
-                <span className="text-sm font-medium text-white">50,000+</span>
-                <span className="text-sm">models processed</span>
-              </div>
-              <div className="flex items-center gap-2 text-neutral-500">
-                <Star className="w-4 h-4 fill-current" />
-                <span className="text-sm font-medium text-white">4.9/5</span>
-                <span className="text-sm">rating</span>
-              </div>
-            </div>
-
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-20 animate-fade-in-up delay-400">
               <Button
@@ -123,26 +160,56 @@ export default function Home() {
                 variant="outline"
                 size="lg"
                 className="border-neutral-800 bg-transparent hover:bg-neutral-900 text-white px-8 py-3 rounded-md font-medium transition-colors"
+                onClick={() => scrollToSection("features")}
               >
-                <Link href="#features" className="flex items-center gap-2">
+                <div className="">
                   <Eye className="w-4 h-4" />
                   Explore Features
-                </Link>
+                </div>
               </Button>
             </div>
 
             {/* Preview Area */}
             <div className="relative max-w-4xl mx-auto animate-fade-in-up delay-500">
-              <div className="rounded-lg bg-neutral-900 border border-neutral-800 p-8">
-                <div className="aspect-video bg-neutral-950 rounded-md border border-neutral-800 flex items-center justify-center">
-                  <div className="text-center">
-                    <Upload className="w-12 h-12 text-neutral-600 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2 text-neutral-300">
-                      Interactive 3D Viewer Preview
-                    </h3>
-                    <p className="text-neutral-500 text-sm">
-                      Your uploaded models come to life here
-                    </p>
+              <div className="rounded-lg bg-neutral-900 border border-neutral-800 p-4 md:p-8">
+                <div
+                  ref={videoContainerRef}
+                  className="bg-neutral-950 rounded-md border border-neutral-800 overflow-hidden relative group"
+                  style={{ aspectRatio: videoAspectRatio }}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <video
+                      ref={videoRef}
+                      src="/preview.mp4"
+                      className="w-full h-full object-contain"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      onClick={togglePlayPause}
+                      onLoadedMetadata={handleVideoLoadedMetadata}
+                    />
+                  </div>
+
+                  {/* Custom Play/Pause Overlay - Always visible on mobile, visible on hover for desktop */}
+                  <div
+                    className={`absolute inset-0 flex items-center justify-center ${
+                      isMobile
+                        ? "opacity-100"
+                        : "opacity-0 group-hover:opacity-100"
+                    } transition-opacity duration-300 bg-black/20 touch-none`}
+                  >
+                    <button
+                      onClick={togglePlayPause}
+                      className="bg-black/50 hover:bg-black/70 text-white rounded-full p-3 md:p-4 transition-colors touch-auto"
+                      aria-label={isPlaying ? "Pause video" : "Play video"}
+                    >
+                      {isPlaying ? (
+                        <Pause className="w-6 h-6 md:w-8 md:h-8" />
+                      ) : (
+                        <Play className="w-6 h-6 md:w-8 md:h-8" />
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -174,9 +241,9 @@ export default function Home() {
                 },
                 {
                   icon: Palette,
-                  title: "Material Editor",
+                  title: "Multiple Materials",
                   description:
-                    "Fine-tune materials, lighting, textures, and environmental effects with our intuitive editor interface.",
+                    "View all the materials inside your model. in 3D and AR.",
                 },
                 {
                   icon: Smartphone,
@@ -188,19 +255,19 @@ export default function Home() {
                   icon: Code,
                   title: "Export Components",
                   description:
-                    "Generate clean, customizable React components with TypeScript support, ready for production.",
+                    "Generate clean iframes for your models for easy embedding in websites and apps.",
                 },
                 {
                   icon: Zap,
                   title: "Lightning Fast",
                   description:
-                    "Optimized rendering with smooth 60fps performance and automatic LOD management.",
+                    "Optimized rendering for performance and efficiency.",
                 },
                 {
-                  icon: Globe,
-                  title: "Global CDN",
+                  icon: ChartPie,
+                  title: "Analytics",
                   description:
-                    "Worldwide content delivery network ensures fast loading times from anywhere.",
+                    "View detailed analytics on model interactions, including views, time spent, and more.",
                 },
               ].map((feature, index) => (
                 <div
@@ -230,8 +297,7 @@ export default function Home() {
                 Ready to bring your models to life?
               </h2>
               <p className="text-lg text-neutral-400 mb-8">
-                Join thousands of creators who trust Modelify for their 3D
-                visualization needs.
+                Join Modelify for your 3D visualization needs.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button
@@ -253,6 +319,10 @@ export default function Home() {
             </div>
           </div>
         </section>
+        <div className="flex justify-center items-center mx-auto px-4 ">
+          {" "}
+          <Footer></Footer>
+        </div>
       </main>
 
       {/* Scroll to Top Button */}

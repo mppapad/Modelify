@@ -61,6 +61,10 @@ interface Model {
   userId: string;
   isPublic?: boolean;
   createdAt: string;
+  views?: number;
+  downloads?: number;
+  lastViewedAt?: string;
+  lastDownloadedAt?: string;
 }
 
 // Loading Skeleton with proper accessibility
@@ -69,26 +73,26 @@ const ModelRowSkeleton = () => (
     <CardContent className="p-4">
       <div className="flex items-center gap-4">
         <div
-          className="w-12 h-12 bg-gray-200 rounded-lg animate-pulse"
+          className="w-12 h-12 bg-muted rounded-lg animate-pulse"
           aria-hidden="true"
         ></div>
         <div className="flex-1 space-y-2">
           <div
-            className="h-4 bg-gray-200 rounded animate-pulse w-48"
+            className="h-4 bg-muted rounded animate-pulse w-48"
             aria-hidden="true"
           ></div>
           <div
-            className="h-3 bg-gray-200 rounded animate-pulse w-32"
+            className="h-3 bg-muted rounded animate-pulse w-32"
             aria-hidden="true"
           ></div>
         </div>
         <div className="flex gap-2">
           <div
-            className="h-8 bg-gray-200 rounded animate-pulse w-20"
+            className="h-8 bg-muted rounded animate-pulse w-20"
             aria-hidden="true"
           ></div>
           <div
-            className="h-8 bg-gray-200 rounded animate-pulse w-16"
+            className="h-8 bg-muted rounded animate-pulse w-16"
             aria-hidden="true"
           ></div>
         </div>
@@ -97,7 +101,7 @@ const ModelRowSkeleton = () => (
   </Card>
 );
 
-export default function SimpleModelsPage() {
+export default function ModelsPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [filteredModels, setFilteredModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,10 +129,6 @@ export default function SimpleModelsPage() {
   // Embed modal
   const [embedDialogOpen, setEmbedDialogOpen] = useState(false);
   const [embedModel, setEmbedModel] = useState<Model | null>(null);
-
-  // View modal for iframe
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [viewModel, setViewModel] = useState<Model | null>(null);
 
   // Add this state near the other useState declarations
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -161,7 +161,7 @@ export default function SimpleModelsPage() {
 
       const data = await response.json();
       console.log("Fetched models data:", data);
-      console.log("First model structure:", data.models?.[0]);
+      console.log("First model structure:", data);
       console.log("First model ID:", data.models?.[0]?.$id);
 
       setModels(data.models || []);
@@ -366,12 +366,56 @@ export default function SimpleModelsPage() {
 
       console.log("Starting download for model:", model.name);
 
+      // Record download analytics BEFORE starting download
+      console.log(
+        "🔥 About to record download analytics for fileId:",
+        model.fileId
+      );
+      try {
+        const analyticsResponse = await fetch(
+          `/api/models/record-download/${encodeURIComponent(model.fileId)}`,
+          {
+            method: "POST",
+            credentials: "include",
+          }
+        );
+
+        console.log(
+          "📊 Analytics API response status:",
+          analyticsResponse.status
+        );
+
+        if (analyticsResponse.ok) {
+          const analyticsResult = await analyticsResponse.json();
+          console.log(
+            "✅ Download analytics recorded successfully:",
+            analyticsResult
+          );
+        } else {
+          const errorData = await analyticsResponse
+            .json()
+            .catch(() => ({ error: "Unknown error" }));
+          console.error("❌ Analytics API failed:", errorData);
+        }
+      } catch (analyticsError) {
+        console.error(
+          "❌ Failed to record download analytics:",
+          analyticsError
+        );
+        // Don't fail the download if analytics fails
+      }
+
+      console.log("📥 Starting file download...");
+
       // Use the corrected API route (downloads plural)
       const response = await fetch(
         `/api/models/downloads/${encodeURIComponent(model.fileId)}`,
         {
           method: "GET",
           credentials: "include",
+          headers: {
+            Accept: "application/octet-stream",
+          },
         }
       );
 
@@ -382,15 +426,27 @@ export default function SimpleModelsPage() {
         throw new Error(errorData.error || "Failed to download file");
       }
 
-      // Get the blob from the response
+      // Get the blob from the response with proper type
       const blob = await response.blob();
 
-      // Create a download link
-      const url = window.URL.createObjectURL(blob);
+      // Verify the blob has content
+      if (blob.size === 0) {
+        throw new Error("Downloaded file is empty");
+      }
+
+      // Create a download link with proper MIME type
+      const url = window.URL.createObjectURL(
+        new Blob([blob], {
+          type: model.mimeType || "application/octet-stream",
+        })
+      );
       const link = document.createElement("a");
       link.href = url;
       link.download = model.fileName;
       link.style.display = "none";
+
+      // Add rel attribute for security
+      link.rel = "noopener noreferrer";
 
       // Trigger download
       document.body.appendChild(link);
@@ -401,6 +457,9 @@ export default function SimpleModelsPage() {
       window.URL.revokeObjectURL(url);
 
       toast.success(`Download started: ${model.fileName}`);
+
+      // Refresh models to get updated download count
+      fetchModels();
     } catch (error) {
       console.error("Download failed:", error);
       setError("Failed to download file");
@@ -427,6 +486,29 @@ export default function SimpleModelsPage() {
     } finally {
       setCopyingId(null);
     }
+  };
+
+  // Open model in new tab directly - Record view when opening
+  const viewModel = async (model: Model) => {
+    try {
+      // Record view analytics when opening the model
+      await fetch(
+        `/api/models/record-view/${encodeURIComponent(model.fileId)}`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      // Refresh models to get updated view count
+      fetchModels();
+    } catch (analyticsError) {
+      console.error("Failed to record view analytics:", analyticsError);
+      // Don't fail the view if analytics fails
+    }
+
+    // Open the model in a new tab
+    window.open(`/view/${model.fileId}`, "_blank");
   };
 
   // Modal handlers - updated to close dropdown first
@@ -469,19 +551,6 @@ export default function SimpleModelsPage() {
     setEmbedModel(null);
   };
 
-  const openViewModal = (model: Model) => {
-    setOpenDropdownId(null); // Close dropdown first
-    setTimeout(() => {
-      setViewModel(model);
-      setViewDialogOpen(true);
-    }, 100);
-  };
-
-  const closeViewModal = () => {
-    setViewDialogOpen(false);
-    setViewModel(null);
-  };
-
   const copyEmbedCode = async (embedCode: string) => {
     try {
       await navigator.clipboard.writeText(embedCode);
@@ -508,6 +577,8 @@ export default function SimpleModelsPage() {
       fileUrl: getFileViewUrl(model.fileId), // Use view URL for export
       downloadUrl: getFileUrl(model.fileId), // Include both URLs
       createdAt: model.createdAt,
+      views: model.views || 0,
+      downloads: model.downloads || 0,
     }));
 
     const dataStr = JSON.stringify(urlsData, null, 2);
@@ -544,27 +615,22 @@ export default function SimpleModelsPage() {
     const extension = getFileExtension(fileName);
     switch (extension) {
       case "glb":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300";
       case "gltf":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300";
       case "usdz":
-        return "bg-purple-100 text-purple-800";
+        return "bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300";
     }
   };
 
   // Add this useEffect after the existing ones
   useEffect(() => {
-    if (
-      editDialogOpen ||
-      embedDialogOpen ||
-      deleteDialogOpen ||
-      viewDialogOpen
-    ) {
+    if (editDialogOpen || embedDialogOpen || deleteDialogOpen) {
       setOpenDropdownId(null);
     }
-  }, [editDialogOpen, embedDialogOpen, deleteDialogOpen, viewDialogOpen]);
+  }, [editDialogOpen, embedDialogOpen, deleteDialogOpen]);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -607,7 +673,7 @@ export default function SimpleModelsPage() {
       {/* Error display */}
       {error && (
         <div
-          className="bg-red-50 border border-red-200 text-red-800 rounded-md p-4"
+          className="bg-destructive/10 border border-destructive/20 text-destructive rounded-md p-4"
           role="alert"
         >
           <div className="flex items-center gap-2">
@@ -634,37 +700,31 @@ export default function SimpleModelsPage() {
           <Card>
             <CardContent className="p-4">
               <div className="text-sm font-medium text-muted-foreground">
+                Total Views
+              </div>
+              <div className="text-2xl font-bold">
+                {models.reduce((sum, model) => sum + (model.views || 0), 0)}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-muted-foreground">
+                Total Downloads
+              </div>
+              <div className="text-2xl font-bold">
+                {models.reduce((sum, model) => sum + (model.downloads || 0), 0)}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-muted-foreground">
                 GLB Files
               </div>
               <div className="text-2xl font-bold">
                 {
                   models.filter((m) => getFileExtension(m.fileName) === "glb")
-                    .length
-                }
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-sm font-medium text-muted-foreground">
-                GLTF Files
-              </div>
-              <div className="text-2xl font-bold">
-                {
-                  models.filter((m) => getFileExtension(m.fileName) === "gltf")
-                    .length
-                }
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-sm font-medium text-muted-foreground">
-                USDZ Files
-              </div>
-              <div className="text-2xl font-bold">
-                {
-                  models.filter((m) => getFileExtension(m.fileName) === "usdz")
                     .length
                 }
               </div>
@@ -694,18 +754,21 @@ export default function SimpleModelsPage() {
 
       {/* Public Notice */}
       <div
-        className="flex items-center gap-3 p-4 border rounded-lg bg-blue-50"
+        className="flex items-center gap-3 p-4 border rounded-lg bg-green-500/10 border-green-500/20"
         role="status"
         aria-live="polite"
       >
         <MessageCircleWarning
-          className="h-5 w-5 text-blue-800"
+          className="h-5 w-5 text-green-500"
           aria-hidden="true"
         />
         <div>
-          <p className="font-medium text-blue-800">Fixed</p>
-          <p className="text-sm text-blue-700">
-            Edit, Download, Delete should work now! Embed is still in progress.
+          <p className="font-medium text-green-800 dark:text-green-200">
+            Analytics Active
+          </p>
+          <p className="text-sm text-green-700 dark:text-green-300">
+            Views and downloads are now being tracked! Check the Analytics page
+            for detailed insights.
           </p>
         </div>
       </div>
@@ -734,14 +797,12 @@ export default function SimpleModelsPage() {
               >
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4 flex-wrap sm:flex-nowrap">
-                    {/* File Icon */}
+                    {/* File Icon - Updated with white icon */}
                     <div
-                      className={`w-12 h-12 rounded-lg flex items-center justify-center ${getFileTypeColor(
-                        model.fileName
-                      )}`}
+                      className="w-12 h-12 rounded-lg flex items-center justify-center bg-primary text-white"
                       aria-hidden="true"
                     >
-                      <FileText className="w-6 h-6" />
+                      <FileText className="w-6 h-6 stroke-black" />
                     </div>
 
                     {/* Content */}
@@ -750,18 +811,28 @@ export default function SimpleModelsPage() {
                       <p className="text-sm text-muted-foreground truncate">
                         {model.fileName} • {formatFileSize(model.fileSize)}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        <time dateTime={model.createdAt}>
-                          {new Date(model.createdAt).toLocaleDateString(
-                            "en-US",
-                            {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            }
-                          )}
-                        </time>
-                      </p>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1">
+                        <span>
+                          <time dateTime={model.createdAt}>
+                            {new Date(model.createdAt).toLocaleDateString(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              }
+                            )}
+                          </time>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Eye className="w-3 h-3" />
+                          {model.views || 0} views
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Download className="w-3 h-3" />
+                          {model.downloads || 0} downloads
+                        </span>
+                      </div>
                     </div>
 
                     {/* File Type Badge */}
@@ -769,7 +840,7 @@ export default function SimpleModelsPage() {
                       {getFileExtension(model.fileName).toUpperCase()}
                     </Badge>
 
-                    {/* Actions */}
+                    {/* Actions - Improved responsive layout */}
                     <div className="flex gap-2 flex-wrap sm:flex-nowrap mt-2 sm:mt-0 w-full sm:w-auto justify-end">
                       <Button
                         size="sm"
@@ -777,6 +848,7 @@ export default function SimpleModelsPage() {
                         onClick={() => copyFileUrl(model)}
                         disabled={copyingId === model.$id}
                         aria-label={`Copy file URL for ${model.name}`}
+                        className="flex-1 sm:flex-none"
                       >
                         {copyingId === model.$id ? (
                           <Loader2
@@ -786,18 +858,19 @@ export default function SimpleModelsPage() {
                         ) : (
                           <Copy className="w-4 h-4" aria-hidden="true" />
                         )}
-                        <span className="hidden sm:inline sm:ml-2">Copy</span>
+                        <span className="ml-2 sm:inline">Copy</span>
                       </Button>
 
-                      {/* View Button - Now opens iframe modal */}
+                      {/* View Button - Now opens directly in new tab */}
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => openViewModal(model)}
+                        onClick={() => viewModel(model)}
                         aria-label={`View ${model.name}`}
+                        className="flex-1 sm:flex-none"
                       >
-                        <Eye className="w-4 h-4" aria-hidden="true" />
-                        <span className="hidden sm:inline sm:ml-2">View</span>
+                        <ExternalLink className="w-4 h-4" aria-hidden="true" />
+                        <span className="ml-2 sm:inline">View</span>
                       </Button>
 
                       <Button
@@ -805,6 +878,7 @@ export default function SimpleModelsPage() {
                         onClick={() => downloadModel(model)}
                         disabled={downloadingId === model.$id}
                         aria-label={`Download ${model.name}`}
+                        className="flex-1 sm:flex-none"
                       >
                         {downloadingId === model.$id ? (
                           <>
@@ -812,16 +886,14 @@ export default function SimpleModelsPage() {
                               className="w-4 h-4 animate-spin"
                               aria-hidden="true"
                             />
-                            <span className="hidden sm:inline sm:ml-2">
+                            <span className="ml-2 sm:inline">
                               Downloading...
                             </span>
                           </>
                         ) : (
                           <>
                             <Download className="w-4 h-4" aria-hidden="true" />
-                            <span className="hidden sm:inline sm:ml-2">
-                              Download
-                            </span>
+                            <span className="ml-2 sm:inline">Download</span>
                           </>
                         )}
                       </Button>
@@ -874,7 +946,7 @@ export default function SimpleModelsPage() {
                               e.preventDefault();
                               openDeleteDialog(model);
                             }}
-                            className="text-red-600 focus:text-red-600"
+                            className="text-destructive focus:text-destructive"
                           >
                             <Trash2
                               className="w-4 h-4 mr-2"
@@ -909,7 +981,7 @@ export default function SimpleModelsPage() {
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive/90"
               disabled={deletingId === modelToDelete?.$id}
             >
               {deletingId === modelToDelete?.$id ? (
@@ -1001,43 +1073,6 @@ export default function SimpleModelsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* View Model Dialog with Iframe */}
-      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="max-w-[95vw] w-full h-[90vh] max-h-[90vh] p-0">
-          <DialogHeader className="p-6 pb-0">
-            <DialogTitle>View Model: {viewModel?.name}</DialogTitle>
-            <DialogDescription>
-              Preview of your 3D model from /view/{viewModel?.fileId}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 p-6 pt-4">
-            {viewModel && (
-              <iframe
-                src={`/view/${viewModel.fileId}`}
-                className="w-full h-full min-h-[60vh] border rounded-lg"
-                title={`View ${viewModel.name}`}
-                loading="lazy"
-              />
-            )}
-          </div>
-          <DialogFooter className="p-6 pt-0">
-            <Button
-              variant="outline"
-              onClick={() =>
-                window.open(`/view/${viewModel?.fileId}`, "_blank")
-              }
-              className="mr-auto"
-            >
-              <ExternalLink className="w-4 h-4 mr-2" aria-hidden="true" />
-              Open in New Tab
-            </Button>
-            <Button variant="outline" onClick={closeViewModal}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Embed Modal - Fixed Responsive */}
       <Dialog open={embedDialogOpen} onOpenChange={setEmbedDialogOpen}>
         <DialogContent className="max-w-[95vw] w-full sm:max-w-[700px]">
@@ -1068,7 +1103,7 @@ export default function SimpleModelsPage() {
                   <Label htmlFor="embed-code" className="text-sm font-medium">
                     Embed Code:
                   </Label>
-                  <div className="mt-2 p-3 bg-gray-100 rounded-md max-h-[20vh] overflow-auto">
+                  <div className="mt-2 p-3 bg-muted rounded-md max-h-[20vh] overflow-auto">
                     <code
                       id="embed-code"
                       className="text-xs sm:text-sm whitespace-pre-wrap break-all"
