@@ -4,7 +4,6 @@ import { adminDatabases, adminStorage, config } from "@/lib/appwrite";
 import { createAppwriteUserId } from "@/lib/appwrite";
 import { Query } from "appwrite";
 
-// GET - List user's models
 export async function GET(request: NextRequest) {
   try {
     const { getUser } = getKindeServerSession();
@@ -41,7 +40,7 @@ export async function GET(request: NextRequest) {
     const models = await adminDatabases.listDocuments(
       config.databaseId,
       config.modelsCollectionId,
-      queries
+      queries,
     );
 
     return NextResponse.json({
@@ -59,7 +58,7 @@ export async function GET(request: NextRequest) {
         error: "Failed to fetch models",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

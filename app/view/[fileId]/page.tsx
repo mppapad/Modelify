@@ -127,7 +127,7 @@ export default function ModelViewPage() {
           if (metadataResponse.status === 403) {
             const errorData: ApiError = await metadataResponse.json();
             setError(
-              errorData.message || "Access denied - this model is private"
+              errorData.message || "Access denied - this model is private",
             );
             setRequiresAuth(errorData.requiresAuth || true);
             return;
@@ -152,7 +152,7 @@ export default function ModelViewPage() {
             }
           } else {
             throw new Error(
-              `Failed to fetch metadata: ${metadataResponse.status}`
+              `Failed to fetch metadata: ${metadataResponse.status}`,
             );
           }
         } catch (metaError) {
@@ -502,7 +502,7 @@ export default function ModelViewPage() {
       // Create SVG for dimension lines
       const dimLines = document.createElementNS(
         "http://www.w3.org/2000/svg",
-        "svg"
+        "svg",
       );
       dimLines.id = "dimLines";
       dimLines.setAttribute("width", "100%");
@@ -513,7 +513,7 @@ export default function ModelViewPage() {
       for (let i = 0; i < 5; i++) {
         const line = document.createElementNS(
           "http://www.w3.org/2000/svg",
-          "line"
+          "line",
         );
         line.setAttribute("class", "dimensionLine");
         dimLines.appendChild(line);
@@ -550,7 +550,7 @@ export default function ModelViewPage() {
       svgLine: SVGLineElement,
       spot1: string,
       spot2: string,
-      dimSpot?: string
+      dimSpot?: string,
     ) => {
       const dotHotspot1 = modelViewer.queryHotspot(spot1);
       const dotHotspot2 = modelViewer.queryHotspot(spot2);
@@ -589,30 +589,30 @@ export default function ModelViewPage() {
       lines[0] as SVGLineElement,
       "hotspot-dot+X-Y+Z",
       "hotspot-dot+X-Y-Z",
-      "hotspot-dim+X-Y"
+      "hotspot-dim+X-Y",
     );
     drawLine(
       lines[1] as SVGLineElement,
       "hotspot-dot+X-Y-Z",
       "hotspot-dot+X+Y-Z",
-      "hotspot-dim+X-Z"
+      "hotspot-dim+X-Z",
     );
     drawLine(
       lines[2] as SVGLineElement,
       "hotspot-dot+X+Y-Z",
-      "hotspot-dot-X+Y-Z"
+      "hotspot-dot-X+Y-Z",
     );
     drawLine(
       lines[3] as SVGLineElement,
       "hotspot-dot-X+Y-Z",
       "hotspot-dot-X-Y-Z",
-      "hotspot-dim-X-Z"
+      "hotspot-dim-X-Z",
     );
     drawLine(
       lines[4] as SVGLineElement,
       "hotspot-dot-X-Y-Z",
       "hotspot-dot-X-Y+Z",
-      "hotspot-dim-X-Y"
+      "hotspot-dim-X-Y",
     );
   };
 
@@ -623,7 +623,7 @@ export default function ModelViewPage() {
       if (modelViewer && modelViewer._dimensionUpdateHandler) {
         modelViewer.removeEventListener(
           "camera-change",
-          modelViewer._dimensionUpdateHandler
+          modelViewer._dimensionUpdateHandler,
         );
       }
     };
@@ -729,6 +729,7 @@ export default function ModelViewPage() {
         ar-modes="webxr scene-viewer quick-look"
         camera-controls
         currentVariant={currentVariant}
+        aria-label="3D model"
       />
 
       {/* Toolbar */}
@@ -743,6 +744,7 @@ export default function ModelViewPage() {
                 variant="outline"
                 onClick={activateAR}
                 disabled={!isARSupported}
+                aria-label="View in Augmented Reality"
               >
                 <ScanEye
                   size={40}
@@ -768,7 +770,12 @@ export default function ModelViewPage() {
               <div>
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button className="h-11 w-11" size="icon" variant="outline">
+                    <Button
+                      className="h-11 w-11"
+                      size="icon"
+                      variant="outline"
+                      aria-label="View QR Code"
+                    >
                       <ScanQrCode size={40} color="#000000" strokeWidth={1} />
                     </Button>
                   </DialogTrigger>
@@ -783,7 +790,7 @@ export default function ModelViewPage() {
                     <div className="flex flex-col items-center justify-center py-4">
                       <Image
                         src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
-                          currentUrl
+                          currentUrl,
                         )}`}
                         width={200}
                         height={200}
@@ -817,6 +824,7 @@ export default function ModelViewPage() {
                 size="icon"
                 variant="outline"
                 onClick={toggleDimensions}
+                aria-label="View Dimensions"
               >
                 <Ruler
                   size={40}
@@ -838,7 +846,12 @@ export default function ModelViewPage() {
               <div>
                 <Drawer>
                   <DrawerTrigger asChild>
-                    <Button className="h-11 w-11" size="icon" variant="outline">
+                    <Button
+                      className="h-11 w-11"
+                      size="icon"
+                      variant="outline"
+                      aria-label="View material variants"
+                    >
                       <Settings strokeWidth={1} size={28} />
                     </Button>
                   </DrawerTrigger>
@@ -923,7 +936,7 @@ export default function ModelViewPage() {
                                       </div>
                                     )}
                                   </div>
-                                )
+                                ),
                             )
                           ) : (
                             <div className="col-span-2 text-sm text-gray-500 p-4 bg-gray-50 rounded-lg">
@@ -949,74 +962,6 @@ export default function ModelViewPage() {
         </TooltipProvider>
       </div>
 
-      {/* Info Button */}
-      <div className="absolute bottom-4 right-4">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button className="h-11 w-11" size="icon" variant="outline">
-                      <Info size={40} color="#000000" strokeWidth={1} />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>How to Use This 3D Viewer</DialogTitle>
-                      <DialogDescription>
-                        Instructions for interacting with the 3D model
-                        {modelData?.name && ` of ${modelData.name}`}
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                      <h3 className="text-lg font-medium mb-2">
-                        Viewing Controls:
-                      </h3>
-                      <ul className="list-disc pl-5 space-y-2 mb-4">
-                        <li>Click and drag to rotate the model</li>
-                        <li>Scroll or pinch to zoom in/out</li>
-                        <li>Right-click and drag to pan</li>
-                      </ul>
-
-                      <h3 className="text-lg font-medium mb-2">
-                        Toolbar Options:
-                      </h3>
-                      <ul className="list-disc pl-5 space-y-2">
-                        <li>
-                          <strong>AR View:</strong> See the product in your
-                          physical space
-                        </li>
-                        <li>
-                          <strong>QR Code:</strong> Share or open on a mobile
-                          device
-                        </li>
-                        <li>
-                          <strong>Dimensions:</strong> View product's
-                          measurements
-                        </li>
-                        <li>
-                          <strong>Materials:</strong> Change material variants
-                          of the model
-                        </li>
-                      </ul>
-                    </div>
-                    <DialogClose asChild>
-                      <Button type="button" className="w-full">
-                        Got it
-                      </Button>
-                    </DialogClose>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side={"left"}>
-              <p>Information</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-
       {/* CSS for dimensions */}
       <style jsx global>{`
         .dot {
@@ -1030,7 +975,10 @@ export default function ModelViewPage() {
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
           color: rgba(0, 0, 0, 0.8);
           display: block;
-          font-family: Futura, Helvetica Neue, sans-serif;
+          font-family:
+            Futura,
+            Helvetica Neue,
+            sans-serif;
           font-size: 1em;
           font-weight: 700;
           max-width: 128px;
