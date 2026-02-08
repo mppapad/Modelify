@@ -13,7 +13,6 @@ import {
   Ruler,
   QrCodeIcon as ScanQrCode,
   ScanEye,
-  Info,
   Loader2,
 } from "lucide-react";
 import Image from "next/image";
@@ -101,9 +100,9 @@ export default function ModelViewPage() {
   const [showDimensions, setShowDimensions] = useState(false);
   const [availableVariants, setAvailableVariants] = useState<string[]>([]);
   const [currentVariant, setCurrentVariant] = useState<string | null>(null);
-  const arSessionActive = useRef<boolean>(false);
-  const dimensionsSetup = useRef<boolean>(false);
+  const modelViewerRef = useRef<any>(null);
   const [viewRecorded, setViewRecorded] = useState(false);
+  const renderSVGRef = useRef<(() => void) | null>(null);
 
   // Fetch model data and generate URL
   useEffect(() => {
@@ -214,6 +213,7 @@ export default function ModelViewPage() {
       const modelViewer = document.querySelector("model-viewer");
       if (modelViewer) {
         setIsARSupported((modelViewer as any).canActivateAR === true);
+        modelViewerRef.current = modelViewer;
       }
     };
 
@@ -225,43 +225,359 @@ export default function ModelViewPage() {
     return () => clearTimeout(timer);
   }, [modelUrl]);
 
-  // Set up AR status monitoring
+  // Initialize dimensions when model loads and dimensions are shown
   useEffect(() => {
-    const modelViewer = document.querySelector("model-viewer") as any;
-    if (!modelViewer) return;
+    if (!modelViewerRef.current || !showDimensions) return;
 
-    const handleARStatus = (event: any) => {
-      console.log(`AR Status: ${event.detail.status}`);
+    const modelViewer = modelViewerRef.current;
 
-      if (event.detail.status === "session-started") {
-        arSessionActive.current = true;
-        setTimeout(() => {
-          if (currentVariant) {
-            console.log(`Applying variant in AR: ${currentVariant}`);
-            modelViewer.variantName =
-              currentVariant === "default" ? null : currentVariant;
-          }
-        }, 300);
-      } else if (event.detail.status === "session-ended") {
-        arSessionActive.current = false;
-        setTimeout(() => {
-          if (currentVariant) {
-            modelViewer.variantName =
-              currentVariant === "default" ? null : currentVariant;
-          }
-        }, 100);
+    const initializeDimensions = () => {
+      if (modelViewer.loaded) {
+        setupDimensionHotspots();
+      } else {
+        modelViewer.addEventListener("load", setupDimensionHotspots, {
+          once: true,
+        });
       }
     };
 
-    modelViewer.addEventListener("ar-status", handleARStatus);
+    initializeDimensions();
+
     return () => {
-      modelViewer.removeEventListener("ar-status", handleARStatus);
+      // Cleanup
+      removeDimensionHotspots();
     };
-  }, [currentVariant]);
+  }, [showDimensions]);
+
+  // Toggle dimensions visibility
+  const toggleDimensions = () => {
+    const newShowDimensions = !showDimensions;
+    setShowDimensions(newShowDimensions);
+
+    if (!newShowDimensions) {
+      removeDimensionHotspots();
+    }
+  };
+
+  // Setup dimension hotspots
+  const setupDimensionHotspots = () => {
+    const modelViewer = modelViewerRef.current;
+    if (!modelViewer) return;
+
+    try {
+      // Get model dimensions
+      const center = modelViewer.getBoundingBoxCenter();
+      const size = modelViewer.getDimensions();
+      const x2 = size.x / 2;
+      const y2 = size.y / 2;
+      const z2 = size.z / 2;
+
+      // Create all hotspot elements
+      const hotspots = [
+        {
+          slot: "hotspot-dot+X-Y+Z",
+          position: `${center.x + x2} ${center.y - y2} ${center.z + z2}`,
+          normal: "1 0 0",
+          type: "dot",
+        },
+        {
+          slot: "hotspot-dim+X-Y",
+          position: `${center.x + x2 * 1.2} ${center.y - y2 * 1.1} ${center.z}`,
+          normal: "1 0 0",
+          type: "dim",
+          text: `${(size.z * 100).toFixed(0)} cm`,
+        },
+        {
+          slot: "hotspot-dot+X-Y-Z",
+          position: `${center.x + x2} ${center.y - y2} ${center.z - z2}`,
+          normal: "1 0 0",
+          type: "dot",
+        },
+        {
+          slot: "hotspot-dim+X-Z",
+          position: `${center.x + x2 * 1.2} ${center.y} ${center.z - z2 * 1.2}`,
+          normal: "1 0 0",
+          type: "dim",
+          text: `${(size.y * 100).toFixed(0)} cm`,
+        },
+        {
+          slot: "hotspot-dot+X+Y-Z",
+          position: `${center.x + x2} ${center.y + y2} ${center.z - z2}`,
+          normal: "0 1 0",
+          type: "dot",
+        },
+        {
+          slot: "hotspot-dim+Y-Z",
+          position: `${center.x} ${center.y + y2 * 1.1} ${center.z - z2 * 1.1}`,
+          normal: "0 1 0",
+          type: "dim",
+          text: `${(size.x * 100).toFixed(0)} cm`,
+        },
+        {
+          slot: "hotspot-dot-X+Y-Z",
+          position: `${center.x - x2} ${center.y + y2} ${center.z - z2}`,
+          normal: "0 1 0",
+          type: "dot",
+        },
+        {
+          slot: "hotspot-dim-X-Z",
+          position: `${center.x - x2 * 1.2} ${center.y} ${center.z - z2 * 1.2}`,
+          normal: "-1 0 0",
+          type: "dim",
+          text: `${(size.y * 100).toFixed(0)} cm`,
+        },
+        {
+          slot: "hotspot-dot-X-Y-Z",
+          position: `${center.x - x2} ${center.y - y2} ${center.z - z2}`,
+          normal: "-1 0 0",
+          type: "dot",
+        },
+        {
+          slot: "hotspot-dim-X-Y",
+          position: `${center.x - x2 * 1.2} ${center.y - y2 * 1.1} ${center.z}`,
+          normal: "-1 0 0",
+          type: "dim",
+          text: `${(size.z * 100).toFixed(0)} cm`,
+        },
+        {
+          slot: "hotspot-dot-X-Y+Z",
+          position: `${center.x - x2} ${center.y - y2} ${center.z + z2}`,
+          normal: "-1 0 0",
+          type: "dot",
+        },
+      ];
+
+      // Create SVG for dimension lines
+      const dimLines = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "svg",
+      );
+      dimLines.id = "dimLines";
+      dimLines.setAttribute("width", "100%");
+      dimLines.setAttribute("height", "100%");
+      dimLines.setAttribute("class", "dimensionLineContainer");
+      dimLines.style.position = "absolute";
+      dimLines.style.top = "0";
+      dimLines.style.left = "0";
+      dimLines.style.pointerEvents = "none";
+      dimLines.style.zIndex = "5";
+
+      // Create 5 dimension lines
+      for (let i = 0; i < 5; i++) {
+        const line = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "line",
+        );
+        line.setAttribute("class", "dimensionLine");
+        dimLines.appendChild(line);
+      }
+
+      modelViewer.appendChild(dimLines);
+
+      // Create hotspot elements
+      hotspots.forEach((hotspotInfo) => {
+        const element = document.createElement("button");
+        element.slot = hotspotInfo.slot;
+        element.className = hotspotInfo.type;
+        element.setAttribute("data-position", hotspotInfo.position);
+        element.setAttribute("data-normal", hotspotInfo.normal);
+
+        if (hotspotInfo.type === "dim" && hotspotInfo.text) {
+          element.textContent = hotspotInfo.text;
+        }
+
+        modelViewer.appendChild(element);
+      });
+
+      // Create a map of dimension slot to normal for visibility checking
+      const dimensionNormals = {};
+      hotspots.forEach((h) => {
+        if (h.type === "dim") {
+          dimensionNormals[h.slot] = h.normal;
+        }
+      });
+
+      // Setup SVG rendering function with proper visibility
+      const renderSVG = () => {
+        const lines = modelViewer.querySelectorAll(".dimensionLine");
+
+        const drawLine = (
+          svgLine: SVGLineElement,
+          dotHotspot1: string,
+          dotHotspot2: string,
+          dimensionHotspot?: string,
+        ) => {
+          try {
+            const dot1 = modelViewer.queryHotspot(dotHotspot1);
+            const dot2 = modelViewer.queryHotspot(dotHotspot2);
+            const dimensionElement = dimensionHotspot
+              ? modelViewer.querySelector(`[slot="${dimensionHotspot}"]`)
+              : null;
+
+            if (dot1 && dot2 && dot1.canvasPosition && dot2.canvasPosition) {
+              svgLine.setAttribute("x1", dot1.canvasPosition.x.toString());
+              svgLine.setAttribute("y1", dot1.canvasPosition.y.toString());
+              svgLine.setAttribute("x2", dot2.canvasPosition.x.toString());
+              svgLine.setAttribute("y2", dot2.canvasPosition.y.toString());
+
+              // Control visibility based on camera facing
+              if (dimensionElement && dimensionHotspot) {
+                // Get camera orbit
+                const cameraOrbit = modelViewer.getCameraOrbit();
+                const theta = cameraOrbit?.theta || 0;
+                const phi = cameraOrbit?.phi || 0;
+
+                // Get the normal for this dimension
+                const normalStr = dimensionNormals[dimensionHotspot] || "1 0 0";
+                const normalParts = normalStr.split(" ").map(Number);
+
+                // Calculate camera direction (simplified)
+                const cameraX = Math.sin(theta) * Math.sin(phi);
+                const cameraY = Math.cos(phi);
+                const cameraZ = Math.cos(theta) * Math.sin(phi);
+
+                // Dot product between camera direction and hotspot normal
+                const dot =
+                  cameraX * normalParts[0] +
+                  cameraY * normalParts[1] +
+                  cameraZ * normalParts[2];
+
+                // Show dimension and line when facing the camera (dot > 0.1)
+                // Hide when looking from behind (dot < 0.1)
+                const shouldBeVisible = dot > 0.1;
+
+                if (shouldBeVisible) {
+                  svgLine.style.display = "block";
+                  dimensionElement.style.display = "block";
+                } else {
+                  svgLine.style.display = "none";
+                  dimensionElement.style.display = "none";
+                }
+              } else {
+                // No dimension hotspot, just show the line
+                svgLine.style.display = "block";
+              }
+            } else {
+              svgLine.style.display = "none";
+              if (dimensionElement) {
+                dimensionElement.style.display = "none";
+              }
+            }
+          } catch (error) {
+            // Silently fail - don't spam console
+          }
+        };
+
+        // Draw all lines
+        drawLine(
+          lines[0],
+          "hotspot-dot+X-Y+Z",
+          "hotspot-dot+X-Y-Z",
+          "hotspot-dim+X-Y",
+        );
+        drawLine(
+          lines[1],
+          "hotspot-dot+X-Y-Z",
+          "hotspot-dot+X+Y-Z",
+          "hotspot-dim+X-Z",
+        );
+        drawLine(lines[2], "hotspot-dot+X+Y-Z", "hotspot-dot-X+Y-Z");
+        drawLine(
+          lines[3],
+          "hotspot-dot-X+Y-Z",
+          "hotspot-dot-X-Y-Z",
+          "hotspot-dim-X-Z",
+        );
+        drawLine(
+          lines[4],
+          "hotspot-dot-X-Y-Z",
+          "hotspot-dot-X-Y+Z",
+          "hotspot-dim-X-Y",
+        );
+      };
+
+      // Store the render function reference
+      renderSVGRef.current = renderSVG;
+
+      // Initial render
+      setTimeout(() => {
+        renderSVG();
+      }, 300);
+
+      // Update on camera change
+      modelViewer.addEventListener("camera-change", renderSVG);
+
+      // Handle AR sessions - hide dimensions in AR
+      modelViewer.addEventListener("ar-status", (event: any) => {
+        const dimElements = [
+          ...modelViewer.querySelectorAll(".dim"),
+          modelViewer.querySelector("#dimLines"),
+        ].filter((el) => el);
+
+        if (event.detail.status === "session-started") {
+          dimElements.forEach((element) => {
+            element.style.display = "none";
+          });
+        } else if (event.detail.status === "session-ended") {
+          setTimeout(() => {
+            // Re-render after AR session
+            renderSVG();
+          }, 100);
+        }
+      });
+
+      console.log("Dimension hotspots initialized");
+    } catch (error) {
+      console.error("Error setting up dimension hotspots:", error);
+    }
+  };
+
+  // Remove dimension hotspots
+  const removeDimensionHotspots = () => {
+    const modelViewer = modelViewerRef.current;
+    if (!modelViewer) return;
+
+    // Remove SVG lines
+    const dimLines = modelViewer.querySelector("#dimLines");
+    if (dimLines) dimLines.remove();
+
+    // Remove all hotspot elements
+    const hotspots = [
+      "hotspot-dot+X-Y+Z",
+      "hotspot-dim+X-Y",
+      "hotspot-dot+X-Y-Z",
+      "hotspot-dim+X-Z",
+      "hotspot-dot+X+Y-Z",
+      "hotspot-dim+Y-Z",
+      "hotspot-dot-X+Y-Z",
+      "hotspot-dim-X-Z",
+      "hotspot-dot-X-Y-Z",
+      "hotspot-dim-X-Y",
+      "hotspot-dot-X-Y+Z",
+    ];
+
+    hotspots.forEach((slot) => {
+      const element = modelViewer.querySelector(`[slot="${slot}"]`);
+      if (element) element.remove();
+    });
+
+    // Remove event listeners
+    if (renderSVGRef.current) {
+      modelViewer.removeEventListener("camera-change", renderSVGRef.current);
+      renderSVGRef.current = null;
+    }
+  };
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      removeDimensionHotspots();
+    };
+  }, []);
 
   // Load available material variants from the model
   const loadModelVariants = () => {
-    const modelViewer: any = document.querySelector("model-viewer");
+    const modelViewer = modelViewerRef.current;
     if (!modelViewer) return;
 
     const trySetVariants = () => {
@@ -290,14 +606,15 @@ export default function ModelViewPage() {
   // Change the current variant
   const changeVariant = (variantName: string) => {
     try {
-      const modelViewer = document.querySelector("model-viewer") as any;
+      const modelViewer = modelViewerRef.current;
       if (!modelViewer) return;
 
-      modelViewer.variantName = variantName === "default" ? null : variantName;
       setCurrentVariant(variantName);
 
-      if (modelViewer) {
-        modelViewer.setAttribute("data-ar-variant", variantName);
+      if (variantName === "default") {
+        modelViewer.variantName = null;
+      } else {
+        modelViewer.variantName = variantName;
       }
 
       console.log(`Changed variant to: ${variantName}`);
@@ -309,327 +626,22 @@ export default function ModelViewPage() {
   // Activate AR
   const activateAR = () => {
     try {
-      const modelViewer = document.querySelector("model-viewer") as any;
+      const modelViewer = modelViewerRef.current;
       if (!modelViewer || !modelViewer.canActivateAR) {
         console.log("AR not supported or model viewer not available");
+        toast.error("AR not supported on this device");
         return;
       }
 
-      console.log(`Current variant before AR: ${currentVariant}`);
-
-      if (currentVariant) {
-        modelViewer.setAttribute("data-current-variant", currentVariant);
-        modelViewer.dataset.arVariant = currentVariant;
-        modelViewer.variantName =
-          currentVariant === "default" ? null : currentVariant;
-        console.log(`Variant set before AR: ${currentVariant}`);
-      }
-
-      setTimeout(() => {
-        if (currentVariant) {
-          modelViewer.variantName =
-            currentVariant === "default" ? null : currentVariant;
-        }
-        modelViewer.activateAR();
-      }, 50);
+      console.log(`Activating AR with variant: ${currentVariant}`);
+      modelViewer.activateAR();
     } catch (error) {
       console.error("Error activating AR:", error);
+      toast.error("Failed to activate AR");
     }
   };
 
-  // Fixed toggle dimensions function
-  const toggleDimensions = () => {
-    const newShowDimensions = !showDimensions;
-    setShowDimensions(newShowDimensions);
-
-    if (newShowDimensions) {
-      // Reset the setup flag when enabling
-      dimensionsSetup.current = false;
-      setTimeout(() => {
-        setupDimensions();
-      }, 100);
-    } else {
-      // Hide all dimension elements
-      document.querySelectorAll(".hotspot-element").forEach((el) => {
-        (el as HTMLElement).style.display = "none";
-      });
-
-      const dimLines = document.getElementById("dimLines");
-      if (dimLines) {
-        dimLines.style.display = "none";
-      }
-
-      // Reset setup flag
-      dimensionsSetup.current = false;
-    }
-  };
-
-  // Fixed setup dimensions function
-  const setupDimensions = () => {
-    const modelViewer = document.querySelector("model-viewer");
-    if (!modelViewer || dimensionsSetup.current) return;
-
-    const createDimensionsWhenReady = () => {
-      if ((modelViewer as any).loaded && !dimensionsSetup.current) {
-        dimensionsSetup.current = true;
-        createDimensionElements(modelViewer as any);
-      }
-    };
-
-    if ((modelViewer as any).loaded) {
-      createDimensionsWhenReady();
-    } else {
-      modelViewer.addEventListener("load", createDimensionsWhenReady, {
-        once: true,
-      });
-    }
-  };
-
-  // Fixed create dimension elements function
-  const createDimensionElements = (modelViewer: any) => {
-    try {
-      // Remove existing hotspots and lines first
-      document
-        .querySelectorAll(".hotspot-element")
-        .forEach((element) => element.remove());
-      const existingLines = document.getElementById("dimLines");
-      if (existingLines) {
-        existingLines.remove();
-      }
-
-      // Get model dimensions and center
-      const center = modelViewer.getBoundingBoxCenter();
-      const size = modelViewer.getDimensions();
-      const x2 = size.x / 2;
-      const y2 = size.y / 2;
-      const z2 = size.z / 2;
-
-      // Create hotspots with better positioning
-      const hotspots = [
-        {
-          name: "hotspot-dot+X-Y+Z",
-          position: `${center.x + x2} ${center.y - y2} ${center.z + z2}`,
-          normal: "1 0 0",
-          type: "dot",
-        },
-        {
-          name: "hotspot-dim+X-Y",
-          position: `${center.x + x2 * 1.2} ${center.y - y2 * 1.1} ${center.z}`,
-          normal: "1 0 0",
-          type: "dim",
-          text: `${(size.z * 100).toFixed(0)} cm`,
-        },
-        {
-          name: "hotspot-dot+X-Y-Z",
-          position: `${center.x + x2} ${center.y - y2} ${center.z - z2}`,
-          normal: "1 0 0",
-          type: "dot",
-        },
-        {
-          name: "hotspot-dim+X-Z",
-          position: `${center.x + x2 * 1.2} ${center.y} ${center.z - z2 * 1.2}`,
-          normal: "1 0 0",
-          type: "dim",
-          text: `${(size.y * 100).toFixed(0)} cm`,
-        },
-        {
-          name: "hotspot-dot+X+Y-Z",
-          position: `${center.x + x2} ${center.y + y2} ${center.z - z2}`,
-          normal: "0 1 0",
-          type: "dot",
-        },
-        {
-          name: "hotspot-dim+Y-Z",
-          position: `${center.x} ${center.y + y2 * 1.1} ${center.z - z2 * 1.1}`,
-          normal: "0 1 0",
-          type: "dim",
-          text: `${(size.x * 100).toFixed(0)} cm`,
-        },
-        {
-          name: "hotspot-dot-X+Y-Z",
-          position: `${center.x - x2} ${center.y + y2} ${center.z - z2}`,
-          normal: "0 1 0",
-          type: "dot",
-        },
-        {
-          name: "hotspot-dim-X-Z",
-          position: `${center.x - x2 * 1.2} ${center.y} ${center.z - z2 * 1.2}`,
-          normal: "-1 0 0",
-          type: "dim",
-          text: `${(size.y * 100).toFixed(0)} cm`,
-        },
-        {
-          name: "hotspot-dot-X-Y-Z",
-          position: `${center.x - x2} ${center.y - y2} ${center.z - z2}`,
-          normal: "-1 0 0",
-          type: "dot",
-        },
-        {
-          name: "hotspot-dim-X-Y",
-          position: `${center.x - x2 * 1.2} ${center.y - y2 * 1.1} ${center.z}`,
-          normal: "-1 0 0",
-          type: "dim",
-          text: `${(size.z * 100).toFixed(0)} cm`,
-        },
-        {
-          name: "hotspot-dot-X-Y+Z",
-          position: `${center.x - x2} ${center.y - y2} ${center.z + z2}`,
-          normal: "-1 0 0",
-          type: "dot",
-        },
-      ];
-
-      // Create hotspots
-      hotspots.forEach((spot) => {
-        const hotspot = document.createElement("button");
-        hotspot.setAttribute("class", `hotspot-element ${spot.type}`);
-        hotspot.setAttribute("slot", spot.name);
-        hotspot.dataset.position = spot.position;
-        hotspot.dataset.normal = spot.normal;
-
-        if (spot.text) {
-          hotspot.textContent = spot.text;
-        }
-
-        // Initially hide dots, show dims only when facing camera
-        if (spot.type === "dot") {
-          hotspot.style.display = "none";
-        }
-
-        modelViewer.appendChild(hotspot);
-      });
-
-      // Create SVG for dimension lines
-      const dimLines = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "svg",
-      );
-      dimLines.id = "dimLines";
-      dimLines.setAttribute("width", "100%");
-      dimLines.setAttribute("height", "100%");
-      dimLines.setAttribute("class", "dimensionLineContainer");
-
-      // Create dimension lines
-      for (let i = 0; i < 5; i++) {
-        const line = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "line",
-        );
-        line.setAttribute("class", "dimensionLine");
-        dimLines.appendChild(line);
-      }
-
-      modelViewer.appendChild(dimLines);
-
-      // Set up camera change handler for SVG updates
-      const updateHandler = () => updateSVGLines();
-      modelViewer.addEventListener("camera-change", updateHandler);
-
-      // Store the handler for cleanup
-      modelViewer._dimensionUpdateHandler = updateHandler;
-
-      // Initial update
-      setTimeout(() => updateSVGLines(), 100);
-    } catch (error) {
-      console.error("Error setting up dimensions:", error);
-    }
-  };
-
-  // Fixed update SVG lines function
-  const updateSVGLines = () => {
-    if (!showDimensions) return;
-
-    const modelViewer: any = document.querySelector("model-viewer");
-    if (!modelViewer) return;
-
-    const lines = document.querySelectorAll(".dimensionLine");
-    if (!lines.length) return;
-
-    // Function to draw line between two hotspots
-    const drawLine = (
-      svgLine: SVGLineElement,
-      spot1: string,
-      spot2: string,
-      dimSpot?: string,
-    ) => {
-      const dotHotspot1 = modelViewer.queryHotspot(spot1);
-      const dotHotspot2 = modelViewer.queryHotspot(spot2);
-      const dimensionHotspot = dimSpot
-        ? modelViewer.queryHotspot(dimSpot)
-        : null;
-
-      if (dotHotspot1 && dotHotspot2) {
-        svgLine.setAttribute("x1", dotHotspot1.canvasPosition.x);
-        svgLine.setAttribute("y1", dotHotspot1.canvasPosition.y);
-        svgLine.setAttribute("x2", dotHotspot2.canvasPosition.x);
-        svgLine.setAttribute("y2", dotHotspot2.canvasPosition.y);
-
-        // Handle visibility based on camera angle
-        if (dimensionHotspot && !dimensionHotspot.facingCamera) {
-          svgLine.style.display = "none";
-        } else {
-          svgLine.style.display = "block";
-        }
-      }
-    };
-
-    // Update dimension text visibility
-    document.querySelectorAll(".hotspot-element.dim").forEach((el) => {
-      const slot = el.getAttribute("slot");
-      const hotspot = modelViewer.queryHotspot(slot);
-      if (hotspot && !hotspot.facingCamera) {
-        (el as HTMLElement).style.display = "none";
-      } else {
-        (el as HTMLElement).style.display = "block";
-      }
-    });
-
-    // Draw all dimension lines
-    drawLine(
-      lines[0] as SVGLineElement,
-      "hotspot-dot+X-Y+Z",
-      "hotspot-dot+X-Y-Z",
-      "hotspot-dim+X-Y",
-    );
-    drawLine(
-      lines[1] as SVGLineElement,
-      "hotspot-dot+X-Y-Z",
-      "hotspot-dot+X+Y-Z",
-      "hotspot-dim+X-Z",
-    );
-    drawLine(
-      lines[2] as SVGLineElement,
-      "hotspot-dot+X+Y-Z",
-      "hotspot-dot-X+Y-Z",
-    );
-    drawLine(
-      lines[3] as SVGLineElement,
-      "hotspot-dot-X+Y-Z",
-      "hotspot-dot-X-Y-Z",
-      "hotspot-dim-X-Z",
-    );
-    drawLine(
-      lines[4] as SVGLineElement,
-      "hotspot-dot-X-Y-Z",
-      "hotspot-dot-X-Y+Z",
-      "hotspot-dim-X-Y",
-    );
-  };
-
-  // Cleanup effect
-  useEffect(() => {
-    return () => {
-      const modelViewer = document.querySelector("model-viewer") as any;
-      if (modelViewer && modelViewer._dimensionUpdateHandler) {
-        modelViewer.removeEventListener(
-          "camera-change",
-          modelViewer._dimensionUpdateHandler,
-        );
-      }
-    };
-  }, []);
-
-  //record view analytics
+  // Record view analytics
   useEffect(() => {
     if (viewRecorded || !fileId || !modelUrl) return;
 
@@ -642,7 +654,7 @@ export default function ModelViewPage() {
         console.log("View recorded successfully");
       } catch (error) {
         console.error("Failed to record view:", error);
-        setViewRecorded(false); // Reset on error to allow retry
+        setViewRecorded(false);
       }
     };
 
@@ -715,25 +727,34 @@ export default function ModelViewPage() {
   }
 
   return (
-    <div className="h-full w-full relative">
+    <div className="h-screen w-full relative overflow-hidden">
       <ModelViewer
         src={modelUrl}
         alt={modelData?.name || "3D model viewer"}
-        height="100dvh"
+        height="100vh"
         width="100%"
         autoRotate={false}
         shadowIntensity={1.5}
         environmentImage="neutral"
-        className="shadow-2xl"
+        className="w-full h-full"
         ar
         ar-modes="webxr scene-viewer quick-look"
         camera-controls
-        currentVariant={currentVariant}
+        disable-tap
+        ref={modelViewerRef}
         aria-label="3D model"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          backgroundColor: "#f5f5f5",
+        }}
       />
 
       {/* Toolbar */}
-      <div className="absolute top-4 right-4 flex flex-col space-between space-y-1.5">
+      <div className="absolute top-4 right-4 flex flex-col space-between space-y-1.5 z-10">
         {/* AR Button */}
         <TooltipProvider>
           <Tooltip>
@@ -820,7 +841,7 @@ export default function ModelViewPage() {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                className={`h-11 w-11 ${showDimensions ? "bg-blue-100" : ""}`}
+                className={`h-11 w-11 ${showDimensions ? "bg-blue-100 border-blue-300" : ""}`}
                 size="icon"
                 variant="outline"
                 onClick={toggleDimensions}
@@ -834,7 +855,7 @@ export default function ModelViewPage() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side={"left"}>
-              <p>Dimensions</p>
+              <p>{showDimensions ? "Hide Dimensions" : "Show Dimensions"}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -962,6 +983,23 @@ export default function ModelViewPage() {
         </TooltipProvider>
       </div>
 
+      {/* Model info overlay */}
+      {modelData && (
+        <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-4 max-w-xs shadow-lg z-10">
+          <h3 className="font-semibold text-lg mb-1">{modelData.name}</h3>
+          {modelData.description && (
+            <p className="text-sm text-gray-600 mb-2">
+              {modelData.description}
+            </p>
+          )}
+          {modelData.fileSize && (
+            <p className="text-xs text-gray-500">
+              Size: {(modelData.fileSize / 1024 / 1024).toFixed(2)} MB
+            </p>
+          )}
+        </div>
+      )}
+
       {/* CSS for dimensions */}
       <style jsx global>{`
         .dot {
@@ -979,35 +1017,49 @@ export default function ModelViewPage() {
             Futura,
             Helvetica Neue,
             sans-serif;
-          font-size: 1em;
+          font-size: 14px;
           font-weight: 700;
           max-width: 128px;
-          background-color: white;
           overflow-wrap: break-word;
-          padding: 0.5em 1em;
+          padding: 8px 12px;
           position: absolute;
           width: max-content;
           height: max-content;
           transform: translate3d(-50%, -50%, 0);
           pointer-events: none;
           --min-hotspot-opacity: 0;
+          background-color: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(8px) contrast(0.89) saturate(1.27);
+          -webkit-backdrop-filter: blur(8px) contrast(0.89) saturate(1.27);
+          border: 1px solid rgba(255, 255, 255, 0.4);
+          z-index: 10;
         }
 
         @media only screen and (max-width: 800px) {
           .dim {
-            font-size: 3vw;
+            font-size: 12px;
+            padding: 6px 10px;
+            max-width: 100px;
           }
         }
 
         .dimensionLineContainer {
           pointer-events: none;
           display: block;
+          position: absolute;
+          top: 0;
+          left: 0;
+          z-index: 5;
         }
 
         .dimensionLine {
           stroke: #16a5e6;
           stroke-width: 2;
           stroke-dasharray: 2;
+        }
+
+        .hide {
+          display: none !important;
         }
       `}</style>
     </div>
